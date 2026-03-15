@@ -9,7 +9,17 @@
 <!-- Recommended: a wide screenshot of the app UI, or a side-by-side of an MPO pair and its resulting wobble GIF -->
 <!-- ![App Banner](images/banner.png) -->
 
-<!-- --- -->
+---
+
+## Try it
+
+**No installation required** — the app is hosted and free to use:
+
+🔗 **[3ds-wobble-gif.streamlit.app](https://3ds-wobble-gif.streamlit.app/)**
+
+> The app may take ~30 seconds to wake up if it hasn’t been visited recently.
+
+---
 
 ## What is this?
 
@@ -124,9 +134,17 @@ The app will open at `http://localhost:8501`.
 
 ---
 
+## To do
+
+These are improvements I plan to make:
+
+- [ ] Add tooltips to each setting explaining what it does and how it affects the output
+- [ ] *[Add your own planned improvements here]*
+
+---
+
 ## Licence
 
 MIT
 
 ---
-
