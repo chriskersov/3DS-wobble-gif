@@ -128,8 +128,9 @@ These are improvements I plan to make:
 - [x] Add tooltips to each setting explaining what it does and how it affects the output.
 - [ ] Add a variety of example .MPO files on the website for people to try if they dont have a 3DS / .MPO file for themselves.
 - [ ] Complete the README with images.
-- [ ] Fix issue where when you click the minimise diff button it creates another generate GIF button at the bottom.
+- [x] Fix issue where when you click the minimise diff button it creates another generate GIF button at the bottom.
 - [x] Add arrows on either side of the crop slider for ease of use.
+- [ ] Improve the minimise diff function to first locate the subject of the image then minimise diff for just the subject. 
 
 ---
 

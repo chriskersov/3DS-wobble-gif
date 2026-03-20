@@ -190,6 +190,7 @@ if uploaded is not None:
             progress.empty()
         st.session_state["crop_px"] = best_crop
         st.session_state["auto_crop_msg"] = f"Best crop: **{best_crop}px** — diff score `{best_score:.1f}`"
+        st.rerun()
 
     # Persist the success message across reruns (arrow clicks etc.)
     if st.session_state.get("auto_crop_msg"):
