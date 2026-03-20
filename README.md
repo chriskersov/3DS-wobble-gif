@@ -31,19 +31,6 @@ This tool fixes that - converting any `.mpo` file into a wobble GIF that conveys
 
 ---
 
-## Why I built this
-
-<!-- 💬 This is your space — fill in your personal story here -->
-<!-- Some prompts to get you started: -->
-<!-- - When did you get your 3DS? What did you photograph with it? -->
-<!-- - When did you rediscover your old MPO files? -->
-<!-- - What frustrated you about existing solutions? -->
-<!-- - Why did the wobble GIF format appeal to you specifically? -->
-
-> *[Add your personal motivation here — why this mattered to you, what memories or photos prompted it, and what you wanted to preserve.]*
-
----
-
 ## How it works
 
 The classic technique for conveying depth from a stereo pair is the **wobble GIF** — rapidly alternating between the left and right frames creates an illusion of parallax motion that your brain reads as three-dimensional structure. It's an old trick from the stereoscopy community, and it works beautifully.
@@ -139,7 +126,8 @@ The app will open at `http://localhost:8501`.
 These are improvements I plan to make:
 
 - [ ] Add tooltips to each setting explaining what it does and how it affects the output
-- [ ] *[Add your own planned improvements here]*
+- [ ] Add a variet of example .MPO files on the website for people to try if they dont have a 3DS / .MPO file for themselves
+- [ ] Complete the README with images 
 
 ---
 

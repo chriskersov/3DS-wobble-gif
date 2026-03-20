@@ -159,7 +159,15 @@ if uploaded is not None:
 
     _l, col_auto, _r = st.columns([2, 1, 2])
     with col_auto:
-        auto_crop = st.button("Minimise Diff Value", use_container_width=True)
+        auto_crop = st.button(
+            "Minimise Diff Value",
+            use_container_width=True,
+            help=(
+                "Automatically tests every crop value from 0 to the maximum and picks the one "
+                "that produces the lowest pixel difference between the two views. "
+                "A lower diff score means the images are better aligned. This may take a few seconds."
+            ),
+        )
 
     if auto_crop:
         with st.spinner("Searching for optimal crop…"):
@@ -177,12 +185,18 @@ if uploaded is not None:
         st.session_state["best_crop"] = best_crop
         st.success(f"Best crop: **{best_crop}px** — diff score `{best_score:.1f}`")
 
-    default_crop = st.session_state.get("best_crop", 80)
+    default_crop = st.session_state.get("best_crop", 0)
     crop_px = st.slider(
         "Symmetric crop (px) – trims right of LEFT and left of RIGHT",
         min_value=0,
         max_value=crop_max,
         value=default_crop,
+        help=(
+            "The 3DS cameras are physically offset, so the left and right images don't quite line up. "
+            "This crops the inner edge of each image by the same number of pixels — trimming the right "
+            "side of the left view and the left side of the right view — so the remaining content overlaps correctly. "
+            "Use 'Minimise Diff Vallue' to minimise the overall diff, or adjust the slider until the subject is as black as possible."
+        ),
     )
 
     left_cropped, right_cropped = crop_left_right(left_img, right_img, crop_px)
@@ -202,10 +216,33 @@ if uploaded is not None:
         st.markdown(f"**Diff score:** `{diff_score:.1f} / 255`")
 
     st.subheader("Wobble GIF")
-    wobble_cycles = st.slider("Wobble cycles", 1, 30, 10)
-    frames_per_view = st.slider("Frames per static view", 1, 10, 2)
-    frame_duration_ms = st.slider("Frame duration (ms)", 20, 400, 120, step=10)
-    crossfade_steps = st.slider("Crossfade steps", 0, 10, 4)
+    frames_per_view = st.slider(
+        "Frames per static view",
+        1, 10, 2,
+        help=(
+            "How many identical frames are held on the left image and the right image "
+            "before transitioning to the other. Higher values create a more pronounced 'snap' "
+            "between views; lower values make the animation feel faster and more continuous."
+        ),
+    )
+    frame_duration_ms = st.slider(
+        "Frame duration (ms)",
+        20, 400, 120, step=10,
+        help=(
+            "How long each frame is displayed, in milliseconds. "
+            "Lower values speed up the overall animation; higher values slow it down. "
+            "This applies equally to static frames and crossfade frames."
+        ),
+    )
+    crossfade_steps = st.slider(
+        "Crossfade steps",
+        0, 10, 4,
+        help=(
+            "Number of intermediate blend frames inserted between the left and right views. "
+            "Set to 0 for a hard cut (classic wobble), or increase for a smoother dissolve transition. "
+            "More steps produce a smoother but larger GIF."
+        ),
+    )
 
     _l, col_gen, _r = st.columns([2, 1, 2])
     with col_gen:
@@ -216,7 +253,7 @@ if uploaded is not None:
             gif_bytes = make_wobble_gif(
                 left_cropped,
                 right_cropped,
-                wobble_cycles=wobble_cycles,
+                wobble_cycles=1,
                 frames_per_view=frames_per_view,
                 frame_duration_ms=frame_duration_ms,
                 crossfade_steps=crossfade_steps,
