@@ -23,7 +23,7 @@
 
 ## What is this?
 
-The Nintendo 3DS was one of the few consumer cameras to ever shoot **true stereoscopic photographs** — two slightly offset images captured simultaneously and stored together in a single `.mpo` file. On the 3DS screen, the parallax between the two lenses created a genuine glasses-free 3D effect.
+The Nintendo 3DS was one of the few consumer cameras to ever shoot **true stereoscopic photographs** - two slightly offset images captured simultaneously and stored together in a single `.mpo` file. On the 3DS screen, the parallax between the two lenses created a genuine glasses-free 3D effect.
 
 The problem? The `.mpo` format is almost universally unsupported outside of the 3DS itself - you can't open it in Photos, preview it in Finder, or share it anywhere meaningful. The 3D effect is completely lost. Those photos just sit on old SD cards, inaccessible and forgotten.
 
@@ -125,9 +125,11 @@ The app will open at `http://localhost:8501`.
 
 These are improvements I plan to make:
 
-- [ ] Add tooltips to each setting explaining what it does and how it affects the output
-- [ ] Add a variet of example .MPO files on the website for people to try if they dont have a 3DS / .MPO file for themselves
-- [ ] Complete the README with images 
+- [-] Add tooltips to each setting explaining what it does and how it affects the output.
+- [ ] Add a variety of example .MPO files on the website for people to try if they dont have a 3DS / .MPO file for themselves.
+- [ ] Complete the README with images.
+- [ ] Fix issue where when you click the minimise diff button it creates another generate GIF button at the bottom.
+- [-] Add arrows on either side of the crop slider for ease of use.
 
 ---
 

@@ -157,6 +157,12 @@ if uploaded is not None:
 
     crop_max = min(min(left_img.size[0], right_img.size[0]) - 1, 200)
 
+    # Initialise the slider's session state key on first load.
+    # The slider is driven entirely by st.session_state["crop_px"] via its key=
+    # so that arrow buttons can mutate it before the slider widget renders.
+    if "crop_px" not in st.session_state:
+        st.session_state["crop_px"] = 0
+
     _l, col_auto, _r = st.columns([2, 1, 2])
     with col_auto:
         auto_crop = st.button(
@@ -182,22 +188,46 @@ if uploaded is not None:
                     best_crop = c
                 progress.progress((c + 1) / (crop_max + 1))
             progress.empty()
-        st.session_state["best_crop"] = best_crop
-        st.success(f"Best crop: **{best_crop}px** — diff score `{best_score:.1f}`")
+        st.session_state["crop_px"] = best_crop
+        st.session_state["auto_crop_msg"] = f"Best crop: **{best_crop}px** — diff score `{best_score:.1f}`"
 
-    default_crop = st.session_state.get("best_crop", 0)
-    crop_px = st.slider(
-        "Symmetric crop (px) – trims right of LEFT and left of RIGHT",
-        min_value=0,
-        max_value=crop_max,
-        value=default_crop,
-        help=(
-            "The 3DS cameras are physically offset, so the left and right images don't quite line up. "
-            "This crops the inner edge of each image by the same number of pixels — trimming the right "
-            "side of the left view and the left side of the right view — so the remaining content overlaps correctly. "
-            "Use 'Minimise Diff Vallue' to minimise the overall diff, or adjust the slider until the subject is as black as possible."
-        ),
-    )
+    # Persist the success message across reruns (arrow clicks etc.)
+    if st.session_state.get("auto_crop_msg"):
+        st.success(st.session_state["auto_crop_msg"])
+
+    # Arrow buttons must come BEFORE the slider in the script so their
+    # session_state mutations are in place when st.slider renders.
+    col_left_arrow, col_slider, col_right_arrow = st.columns([1, 16, 1])
+
+    with col_left_arrow:
+        st.write("")
+        st.write("")
+        if st.button("◀", use_container_width=True, help="Decrease crop by 1px"):
+            st.session_state["crop_px"] = max(0, st.session_state["crop_px"] - 1)
+
+    with col_right_arrow:
+        st.write("")
+        st.write("")
+        if st.button("▶", use_container_width=True, help="Increase crop by 1px"):
+            st.session_state["crop_px"] = min(crop_max, st.session_state["crop_px"] + 1)
+
+    # The slider uses key="crop_px" so Streamlit reads AND writes directly
+    # to st.session_state["crop_px"] — no value= needed, no on_change needed.
+    with col_slider:
+        st.slider(
+            "Symmetric crop (px) – trims right of LEFT and left of RIGHT",
+            min_value=0,
+            max_value=crop_max,
+            key="crop_px",
+            help=(
+                "The 3DS cameras are physically offset, so the left and right images don't quite line up. "
+                "This crops the inner edge of each image by the same number of pixels — trimming the right "
+                "side of the left view and the left side of the right view — so the remaining content overlaps correctly. "
+                "Use 'Minimise Diff Value' to find the best value automatically, or drag until the overlay looks sharp."
+            ),
+        )
+
+    crop_px = st.session_state["crop_px"]
 
     left_cropped, right_cropped = crop_left_right(left_img, right_img, crop_px)
 
