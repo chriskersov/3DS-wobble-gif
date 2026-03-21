@@ -131,7 +131,7 @@ These are improvements I plan to make:
 - [x] Fix issue where when you click the minimise diff button it creates another generate GIF button at the bottom.
 - [x] Add arrows on either side of the crop slider for ease of use.
 - [ ] Improve the minimise diff function to first locate the subject of the image then minimise diff for just the subject. 
-- [ ] Add a section explaining the cropping, overlay, and diff.
+- [x] Add a section explaining the cropping, overlay, and diff.
 - [ ] Add some instructions as to where to find the .MPO file on the SD card of the 3DS.
 - [ ] Take more photos on the 3DS and upload to have a nice gallery of images people can try.
 
