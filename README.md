@@ -57,17 +57,34 @@ Rather than a hard cut between frames, the tool generates smooth **crossfade tra
 
 ## Example output
 
-**Left frame**
+<!-- **Left frame** -->
 
-![Left frame](images/example_left.jpg)
+<!-- ![Left frame](images/example_left.jpg) -->
 
-**Right frame:**
+<!-- **Right frame:** -->
 
-![Right frame](images/example_right.jpg)
+<!-- ![Right frame](images/example_right.jpg) -->
 
-**Resulting wobble GIF:**
+<!-- **Resulting wobble GIF:** -->
 
-![Wobble GIF](images/example_wobble.gif)
+<!-- ![Wobble GIF](images/example_wobble.gif) --> 
+
+<table>
+  <tr>
+    <td><img src="images/example_left.jpg" alt="Left frame"></td>
+    <td><img src="images/example_right.jpg" alt="Right frame"></td>
+  </tr>
+  <tr>
+    <td align="center">Left frame</td>
+    <td align="center">Right frame</td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="images/example_wobble.gif" alt="Wobble GIF"></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"> Resulting wobble GIF</td>
+  </tr>
+</table>
 
 ---
 
