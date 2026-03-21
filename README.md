@@ -1,6 +1,6 @@
 # 3DS MPO Wobble Tool
 
-> *Bringing Nintendo 3DS stereo photographs back to life — as animated GIFs .*
+> *Bringing Nintendo 3DS stereo photographs back to life - as animated GIFs .*
 
 ---
 
@@ -13,7 +13,7 @@
 
 ## Try it
 
-**No installation required** — the app is hosted and free to use:
+**No installation required** - the app is hosted and free to use:
 
 🔗 **[3ds-wobble-gif.streamlit.app](https://3ds-wobble-gif.streamlit.app/)**
 
@@ -27,13 +27,13 @@ The Nintendo 3DS was one of the few consumer cameras to ever shoot **true stereo
 
 The problem? The `.mpo` format is almost universally unsupported outside of the 3DS itself - you can't open it in Photos, preview it in Finder, or share it anywhere meaningful. The 3D effect is completely lost. Those photos just sit on old SD cards, inaccessible and forgotten.
 
-This tool fixes that - converting any `.mpo` file into a wobble GIF that conveys the depth and parallax of the original scene — viewable on any device, in any browser, with no special hardware required.
+This tool fixes that - converting any `.mpo` file into a wobble GIF that conveys the depth and parallax of the original scene - viewable on any device, in any browser, with no special hardware required.
 
 ---
 
 ## How it works
 
-The classic technique for conveying depth from a stereo pair is the **wobble GIF** — rapidly alternating between the left and right frames creates an illusion of parallax motion that your brain reads as three-dimensional structure. It's an old trick from the stereoscopy community, and it works beautifully.
+The classic technique for conveying depth from a stereo pair is the **wobble GIF** - rapidly alternating between the left and right frames creates an illusion of parallax motion that your brain reads as three-dimensional structure. It's an old trick from the stereoscopy community, and it works beautifully.
 
 ### The pipeline
 
@@ -45,7 +45,7 @@ The classic technique for conveying depth from a stereo pair is the **wobble GIF
 An `.mpo` file is technically a multi-image JPEG - two full JPEG frames concatenated together with some metadata. Python's Pillow library can seek through frames, so extracting the left and right images is straightforward.
 
 **2. Alignment**
-The two 3DS lenses are physically offset, which means the stereo pair has a horizontal disparity. If left uncorrected, the wobble effect can  look chaotic rather than three-dimensional. The tool lets you dial in a **symmetric crop** — trimming the right edge of the left image and the left edge of the right image by the same number of pixels — to bring the two frames into alignment.
+The two 3DS lenses are physically offset, which means the stereo pair has a horizontal disparity. If left uncorrected, the wobble effect can  look chaotic rather than three-dimensional. The tool lets you dial in a **symmetric crop** - trimming the right edge of the left image and the left edge of the right image by the same number of pixels - to bring the two frames into alignment.
 
 **3. Diff scoring**
 To take the guesswork out of alignment, the tool computes a **mean absolute pixel difference** across all RGB channels between the two cropped frames. A lower score means the images are more similar - which generally means better aligned. There's also an auto-optimise button that brute-forces every possible crop value and picks the one with the lowest diff score.
@@ -57,7 +57,7 @@ Rather than a hard cut between frames, the tool generates smooth **crossfade tra
 
 ## Example output
 
-<!-- 🎞️ Add your example wobble GIFs here — this is the most compelling part of the README -->
+<!-- 🎞️ Add your example wobble GIFs here - this is the most compelling part of the README -->
 <!-- Show a before (the raw left/right pair) and after (the wobble GIF) -->
 
 **Left frame / Right frame:**
@@ -68,7 +68,7 @@ Rather than a hard cut between frames, the tool generates smooth **crossfade tra
 **Resulting wobble GIF:**
 
 <!-- ![Wobble GIF](images/example_wobble.gif) -->
-> *[Add your wobble GIF here — this is the money shot]*
+> *[Add your wobble GIF here - this is the money shot]*
 
 ---
 
@@ -104,20 +104,20 @@ The app will open at `http://localhost:8501`.
 ## Using the app
 
 1. **Upload** your `.mpo` file using the file picker
-2. **Check the stereo pair** — you should see two slightly offset versions of the same scene
-3. **Adjust the crop** — drag the slider until the diff score is low, or hit **Minimise Diff Value** to auto-optimise
-4. **Review the overlay and diff image** — the overlay should look sharp, not doubled; the diff image should be mostly dark
-5. **Configure your GIF** — tune the wobble cycles, frame duration, and crossfade steps to taste
-6. **Generate and download** — hit Generate GIF, wait for encoding, then download
+2. **Check the stereo pair** - you should see two slightly offset versions of the same scene
+3. **Adjust the crop** - drag the slider until the diff score is low, or hit **Minimise Diff Value** to auto-optimise
+4. **Review the overlay and diff image** - the overlay should look sharp, not doubled; the diff image should be mostly dark
+5. **Configure your GIF** - tune the wobble cycles, frame duration, and crossfade steps to taste
+6. **Generate and download** - hit Generate GIF, wait for encoding, then download
 
 ---
 
 ## Built with
 
-- [Streamlit](https://streamlit.io) — app framework
-- [Pillow](https://python-pillow.org) — image processing and GIF encoding
-- [NumPy](https://numpy.org) — diff score calculation
-- Hosted on [Streamlit Community Cloud](https://share.streamlit.io) — free tier
+- [Streamlit](https://streamlit.io) - app framework
+- [Pillow](https://python-pillow.org) - image processing and GIF encoding
+- [NumPy](https://numpy.org) - diff score calculation
+- Hosted on [Streamlit Community Cloud](https://share.streamlit.io) - free tier
 
 ---
 
@@ -130,7 +130,7 @@ These are improvements I plan to make:
 - [ ] Complete the README with images.
 - [x] Fix issue where when you click the minimise diff button it creates another generate GIF button at the bottom.
 - [x] Add arrows on either side of the crop slider for ease of use.
-- [ ] Improve the minimise diff function to first locate the subject of the image then minimise diff for just the subject. 
+- [ ] Improve the minimise diff function to first locate the subject of the image then minimise diff for just the subject. This could be done with machine learning or perhaps a depth map?
 - [x] Add a section explaining the cropping, overlay, and diff.
 - [ ] Add some instructions as to where to find the .MPO file on the SD card of the 3DS.
 - [ ] Take more photos on the 3DS and upload to have a nice gallery of images people can try.
