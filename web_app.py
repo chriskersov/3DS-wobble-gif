@@ -1,4 +1,6 @@
 import io
+import os
+import base64
 
 import numpy as np
 import streamlit as st
@@ -12,6 +14,21 @@ st.write(
     "Upload a Nintendo 3DS `.mpo` file, adjust crops, and preview the overlay, "
     "difference image, and wobble GIF generated from the stereo pair."
 )
+
+
+# ── Example files ──────────────────────────────────────────────────────────────
+# Add more entries here in multiples of 3. Each dict needs:
+#   path  – relative path to the .mpo file
+#   label – short display name shown on the card
+EXAMPLE_FILES = [
+    {"path": "examples/example_1.mpo", "label": "Scene 1"},
+    {"path": "examples/example_2.mpo", "label": "Scene 2"},
+    {"path": "examples/example_3.mpo", "label": "Scene 3"},
+    {"path": "examples/example_4.mpo", "label": "Scene 4"},
+    {"path": "examples/example_5.mpo", "label": "Scene 5"},
+    {"path": "examples/example_6.mpo", "label": "Scene 6"},
+]
+# ───────────────────────────────────────────────────────────────────────────────
 
 
 def extract_left_right_from_mpo(file_bytes: bytes):
@@ -136,13 +153,157 @@ def make_wobble_gif(
     return buf.getvalue()
 
 
+def pil_to_b64(img: Image.Image, max_width: int = 400) -> str:
+    """Resize and encode a PIL image as a base64 JPEG string for embedding in HTML."""
+    w, h = img.size
+    if w > max_width:
+        img = img.resize((max_width, int(h * max_width / w)), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.convert("RGB").save(buf, format="JPEG", quality=80)
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def render_example_cards(examples: list[dict]) -> int | None:
+    """
+    Render a grid of stereo-preview cards for each example MPO.
+    Returns the index of the chosen example, or None if none clicked.
+    """
+    available = [(i, ex) for i, ex in enumerate(examples) if os.path.exists(ex["path"])]
+    if not available:
+        return None
+
+    st.markdown("#### Or try an example")
+
+    st.markdown("""
+    <style>
+    .stereo-card {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 4/3;
+        border-radius: 10px;
+        overflow: hidden;
+        cursor: pointer;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+        transition: transform 0.18s ease, box-shadow 0.18s ease;
+        margin-bottom: 4px;
+    }
+    .stereo-card:hover {
+        transform: translateY(-4px) scale(1.02);
+        box-shadow: 0 8px 28px rgba(0,0,0,0.28);
+    }
+    .stereo-card img {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .stereo-card .left-img {
+        clip-path: polygon(0 0, 58% 0, 42% 100%, 0 100%);
+        z-index: 1;
+    }
+    .stereo-card .right-img {
+        clip-path: polygon(58% 0, 100% 0, 100% 100%, 42% 100%);
+        z-index: 1;
+    }
+    .stereo-card .divider {
+        position: absolute;
+        left: 50%;
+        top: 0; bottom: 0;
+        width: 3px;
+        background: rgba(255,255,255,0.85);
+        transform: translateX(-50%) skewX(-8deg);
+        z-index: 2;
+        box-shadow: 0 0 8px rgba(255,255,255,0.5);
+    }
+    .stereo-card .card-label {
+        position: absolute;
+        bottom: 0; left: 0; right: 0;
+        padding: 22px 12px 10px;
+        background: linear-gradient(transparent, rgba(0,0,0,0.6));
+        color: #fff;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-align: center;
+        z-index: 3;
+    }
+    .stereo-card .stereo-badge {
+        position: absolute;
+        top: 8px; right: 8px;
+        background: rgba(204, 0, 0, 0.5);
+        color: #fff;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        padding: 3px 7px;
+        border-radius: 4px;
+        z-index: 3;
+        text-transform: uppercase;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    chosen = None
+    for row_start in range(0, len(available), 3):
+        row = available[row_start:row_start + 3]
+        cols = st.columns(len(row))
+        for col, (i, ex) in zip(cols, row):
+            with col:
+                with open(ex["path"], "rb") as f:
+                    mpo_bytes = f.read()
+                left_img, right_img = extract_left_right_from_mpo(mpo_bytes)
+                left_b64 = pil_to_b64(left_img)
+                right_b64 = pil_to_b64(right_img)
+
+                st.markdown(f"""
+                <div class="stereo-card">
+                    <img class="left-img"  src="data:image/jpeg;base64,{left_b64}">
+                    <img class="right-img" src="data:image/jpeg;base64,{right_b64}">
+                    <div class="divider"></div>
+                    <div class="stereo-badge">3D</div>
+                    <div class="card-label">{ex['label']}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                if st.button(f"Load - {ex['label']}", key=f"example_btn_{i}", use_container_width=True):
+                    chosen = i
+
+    return chosen
+
+
+# ── File loading ───────────────────────────────────────────────────────────────
+
 uploaded = st.file_uploader("Upload a .mpo file", type=["mpo", "MPO"])
+
+if uploaded is None:
+    chosen_idx = render_example_cards(EXAMPLE_FILES)
+    if chosen_idx is not None:
+        ex = EXAMPLE_FILES[chosen_idx]
+        with open(ex["path"], "rb") as f:
+            st.session_state["example_bytes"] = f.read()
+        st.session_state["example_label"] = ex["label"]
+        st.session_state["using_example"] = True
+        st.rerun()
 
 if uploaded is not None:
     cache_key = f"mpo_{uploaded.name}_{uploaded.size}"
     if cache_key not in st.session_state:
         st.session_state[cache_key] = uploaded.read()
-    left_img, right_img = extract_left_right_from_mpo(st.session_state[cache_key])
+    st.session_state.pop("using_example", None)
+    active_bytes_key = cache_key
+elif st.session_state.get("using_example") and "example_bytes" in st.session_state:
+    active_bytes_key = "example_bytes"
+else:
+    active_bytes_key = None
+
+# ── Main app ───────────────────────────────────────────────────────────────────
+
+if active_bytes_key is not None:
+    if st.session_state.get("using_example"):
+        label = st.session_state.get("example_label", "example")
+        st.info(f"Showing example: **{label}**. Upload your own `.mpo` file above to use your own photos.")
+
+    left_img, right_img = extract_left_right_from_mpo(st.session_state[active_bytes_key])
 
     st.subheader("Original stereo pair")
     col1, col2 = st.columns(2)
@@ -155,11 +316,27 @@ if uploaded is not None:
 
     st.subheader("Crop settings")
 
+    st.markdown("""
+    The 3DS camera captures two slightly offset images simultaneously - one for each eye.
+    Without alignment, this offset makes the wobble GIF look jittery rather than three-dimensional.
+
+    **How cropping fixes this:** by trimming the inner edge of each image (the right side of the
+    left image, and the left side of the right image), the two frames can be brought into alignment.
+
+    **What to aim for:** a good alignment has the *subject* as overlapped as possible, and the
+    *background* as different as possible — this is what creates the 3D parallax effect where the
+    background appears to shift around a fixed subject.
+
+    **How to use the crop tool:**
+    - Use the **◀ ▶ arrows** to fine-tune the crop one pixel at a time
+    - Watch the **overlay** and **diff** images below as you adjust
+    - Aim for the subject to appear as sharp in the overlay image and dark as possible in the diff image
+    - **Minimise Diff Value** gives a good starting point, but optimises for the lowest *overall*
+    difference rather than the subject specifically - so manual fine-tuning often improves the result
+    """)
+
     crop_max = min(min(left_img.size[0], right_img.size[0]) - 1, 200)
 
-    # Initialise the slider's session state key on first load.
-    # The slider is driven entirely by st.session_state["crop_px"] via its key=
-    # so that arrow buttons can mutate it before the slider widget renders.
     if "crop_px" not in st.session_state:
         st.session_state["crop_px"] = 0
 
@@ -192,12 +369,9 @@ if uploaded is not None:
         st.session_state["auto_crop_msg"] = f"Best crop: **{best_crop}px** — diff score `{best_score:.1f}`"
         st.rerun()
 
-    # Persist the success message across reruns (arrow clicks etc.)
     if st.session_state.get("auto_crop_msg"):
         st.success(st.session_state["auto_crop_msg"])
 
-    # Arrow buttons must come BEFORE the slider in the script so their
-    # session_state mutations are in place when st.slider renders.
     col_left_arrow, col_slider, col_right_arrow = st.columns([1, 16, 1])
 
     with col_left_arrow:
@@ -212,8 +386,6 @@ if uploaded is not None:
         if st.button("▶", use_container_width=True, help="Increase crop by 1px"):
             st.session_state["crop_px"] = min(crop_max, st.session_state["crop_px"] + 1)
 
-    # The slider uses key="crop_px" so Streamlit reads AND writes directly
-    # to st.session_state["crop_px"] — no value= needed, no on_change needed.
     with col_slider:
         st.slider(
             "Symmetric crop (px) – trims right of LEFT and left of RIGHT",
@@ -258,7 +430,7 @@ if uploaded is not None:
     )
     frame_duration_ms = st.slider(
         "Frame duration (ms)",
-        20, 400, 120, step=10,
+        20, 400, 100, step=10,
         help=(
             "How long each frame is displayed, in milliseconds. "
             "Lower values speed up the overall animation; higher values slow it down. "
@@ -267,7 +439,7 @@ if uploaded is not None:
     )
     crossfade_steps = st.slider(
         "Crossfade steps",
-        0, 10, 4,
+        0, 10, 3,
         help=(
             "Number of intermediate blend frames inserted between the left and right views. "
             "Set to 0 for a hard cut (classic wobble), or increase for a smoother dissolve transition. "
