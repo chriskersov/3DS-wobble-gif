@@ -57,18 +57,17 @@ Rather than a hard cut between frames, the tool generates smooth **crossfade tra
 
 ## Example output
 
-<!-- 🎞️ Add your example wobble GIFs here - this is the most compelling part of the README -->
-<!-- Show a before (the raw left/right pair) and after (the wobble GIF) -->
+**Left frame**
 
-**Left frame / Right frame:**
+![Left frame](images/example_left.jpg)
 
-<!-- ![Left frame](images/example_left.jpg) ![Right frame](images/example_right.jpg) -->
-> *[Add a side-by-side of your left and right frames here]*
+**Right frame:**
+
+![Right frame](images/example_right.jpg)
 
 **Resulting wobble GIF:**
 
-<!-- ![Wobble GIF](images/example_wobble.gif) -->
-> *[Add your wobble GIF here - this is the money shot]*
+![Wobble GIF](images/example_wobble.gif)
 
 ---
 
@@ -125,15 +124,23 @@ The app will open at `http://localhost:8501`.
 
 These are improvements I plan to make:
 
-- [x] Add tooltips to each setting explaining what it does and how it affects the output.
 - [ ] Add a variety of example .MPO files on the website for people to try if they dont have a 3DS / .MPO file for themselves.
-- [ ] Complete the README with images.
-- [x] Fix issue where when you click the minimise diff button it creates another generate GIF button at the bottom.
-- [x] Add arrows on either side of the crop slider for ease of use.
 - [ ] Improve the minimise diff function to first locate the subject of the image then minimise diff for just the subject. This could be done with machine learning or perhaps a depth map?
-- [x] Add a section explaining the cropping, overlay, and diff.
 - [ ] Add some instructions as to where to find the .MPO file on the SD card of the 3DS.
 - [ ] Take more photos on the 3DS and upload to have a nice gallery of images people can try.
+- [ ] Look at the colour range of the generated GIF and if it is possible to adjust that.
+- [ ] Add a 'best crop' for the example images.
+
+## Complete
+
+These are improvements I have implemented:
+
+- [x] Add tooltips to each setting explaining what it does and how it affects the output.
+- [x] Fix issue where when you click the minimise diff button it creates another generate GIF button at the bottom.
+- [x] Add arrows on either side of the crop slider for ease of use.
+- [x] Add a section explaining the cropping, overlay, and diff.
+- [x] Complete the README with images.
+
 
 ---
 

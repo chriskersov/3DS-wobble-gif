@@ -24,9 +24,9 @@ EXAMPLE_FILES = [
     {"path": "examples/example_1.MPO", "label": "Scene 1"},
     {"path": "examples/example_2.MPO", "label": "Scene 2"},
     {"path": "examples/example_3.MPO", "label": "Scene 3"},
-    {"path": "examples/example_4.MPO", "label": "Scene 4"},
-    {"path": "examples/example_5.MPO", "label": "Scene 5"},
-    {"path": "examples/example_6.MPO", "label": "Scene 6"},
+    # {"path": "examples/example_4.MPO", "label": "Scene 4"},
+    # {"path": "examples/example_5.MPO", "label": "Scene 5"},
+    # {"path": "examples/example_6.MPO", "label": "Scene 6"},
 ]
 # ───────────────────────────────────────────────────────────────────────────────
 
