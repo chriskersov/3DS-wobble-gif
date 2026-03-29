@@ -30,27 +30,48 @@ EXAMPLE_FILES = [
 ]
 # ───────────────────────────────────────────────────────────────────────────────
 
-def ternary_search_crop(left_img, right_img, lo, hi):
-    """Find crop value minimising diff score in O(log n) evaluations."""
+from rembg import remove as rembg_remove
+
+def get_subject_mask(img: Image.Image) -> np.ndarray:
+    """Return a boolean mask (H, W) where True = subject pixels."""
+    # rembg removes the background, leaving subject with alpha > 0
+    result = rembg_remove(img.convert("RGBA"))
+    alpha = np.array(result)[:, :, 3]  # extract alpha channel
+    return alpha > 10  # threshold to boolean mask
+
+
+def calc_diff_score(left: Image.Image, right: Image.Image, mask: np.ndarray | None = None) -> float:
+    """Return mean absolute pixel difference (0–255). Lower = better aligned."""
+    left_arr = np.array(left.convert("RGB"), dtype=float)
+    right_arr = np.array(right.convert("RGB"), dtype=float)
+    if left_arr.shape != right_arr.shape:
+        right_pil = Image.fromarray(right_arr.astype("uint8")).resize(
+            (left_arr.shape[1], left_arr.shape[0]), Image.LANCZOS
+        )
+        right_arr = np.array(right_pil, dtype=float)
+    
+    diff = np.abs(left_arr - right_arr)
+    
+    if mask is not None and mask.shape == diff.shape[:2]:
+        return float(np.mean(diff[mask]))
+    return float(np.mean(diff))
+
+def ternary_search_crop(left_img, right_img, lo, hi, mask=None):
     while hi - lo > 2:
         m1 = lo + (hi - lo) // 3
         m2 = hi - (hi - lo) // 3
-        
-        score1 = calc_diff_score(*crop_left_right(left_img, right_img, m1))
-        score2 = calc_diff_score(*crop_left_right(left_img, right_img, m2))
-        
+        score1 = calc_diff_score(*crop_left_right(left_img, right_img, m1), mask=mask)
+        score2 = calc_diff_score(*crop_left_right(left_img, right_img, m2), mask=mask)
         if score1 < score2:
             hi = m2
         else:
             lo = m1
-    
-    # Check the remaining small range exhaustively
+
     best_crop, best_score = lo, float("inf")
     for c in range(lo, hi + 1):
-        score = calc_diff_score(*crop_left_right(left_img, right_img, c))
+        score = calc_diff_score(*crop_left_right(left_img, right_img, c), mask=mask)
         if score < best_score:
             best_score, best_crop = score, c
-    
     return best_crop, best_score
 
 def extract_left_right_from_mpo(file_bytes: bytes):
@@ -106,16 +127,16 @@ def make_diff(left: Image.Image, right: Image.Image) -> Image.Image:
     return ImageEnhance.Contrast(diff).enhance(2.0)
 
 
-def calc_diff_score(left: Image.Image, right: Image.Image) -> float:
-    """Return mean absolute pixel difference (0–255). Lower = better aligned."""
-    left_arr = np.array(left.convert("RGB"), dtype=float)
-    right_arr = np.array(right.convert("RGB"), dtype=float)
-    if left_arr.shape != right_arr.shape:
-        right_pil = Image.fromarray(right_arr.astype("uint8")).resize(
-            (left_arr.shape[1], left_arr.shape[0]), Image.LANCZOS
-        )
-        right_arr = np.array(right_pil, dtype=float)
-    return float(np.mean(np.abs(left_arr - right_arr)))
+# def calc_diff_score(left: Image.Image, right: Image.Image) -> float:
+#     """Return mean absolute pixel difference (0–255). Lower = better aligned."""
+#     left_arr = np.array(left.convert("RGB"), dtype=float)
+#     right_arr = np.array(right.convert("RGB"), dtype=float)
+#     if left_arr.shape != right_arr.shape:
+#         right_pil = Image.fromarray(right_arr.astype("uint8")).resize(
+#             (left_arr.shape[1], left_arr.shape[0]), Image.LANCZOS
+#         )
+#         right_arr = np.array(right_pil, dtype=float)
+#     return float(np.mean(np.abs(left_arr - right_arr)))
 
 
 def make_wobble_gif(
@@ -375,8 +396,10 @@ if active_bytes_key is not None:
         )
 
     if auto_crop:
+        with st.spinner("Detecting subject…"):
+            subject_mask = get_subject_mask(left_img)
         with st.spinner("Searching for optimal crop…"):
-            best_crop, best_score = ternary_search_crop(left_img, right_img, 0, crop_max)
+            best_crop, best_score = ternary_search_crop(left_img, right_img, 0, crop_max, subject_mask)
         st.session_state["crop_px"] = best_crop
         st.session_state["auto_crop_msg"] = f"Best crop: **{best_crop}px** — diff score `{best_score:.1f}`"
         st.rerun()
