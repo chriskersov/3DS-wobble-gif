@@ -30,6 +30,28 @@ EXAMPLE_FILES = [
 ]
 # ───────────────────────────────────────────────────────────────────────────────
 
+def ternary_search_crop(left_img, right_img, lo, hi):
+    """Find crop value minimising diff score in O(log n) evaluations."""
+    while hi - lo > 2:
+        m1 = lo + (hi - lo) // 3
+        m2 = hi - (hi - lo) // 3
+        
+        score1 = calc_diff_score(*crop_left_right(left_img, right_img, m1))
+        score2 = calc_diff_score(*crop_left_right(left_img, right_img, m2))
+        
+        if score1 < score2:
+            hi = m2
+        else:
+            lo = m1
+    
+    # Check the remaining small range exhaustively
+    best_crop, best_score = lo, float("inf")
+    for c in range(lo, hi + 1):
+        score = calc_diff_score(*crop_left_right(left_img, right_img, c))
+        if score < best_score:
+            best_score, best_crop = score, c
+    
+    return best_crop, best_score
 
 def extract_left_right_from_mpo(file_bytes: bytes):
     """Return first two frames from an MPO file as Pillow images."""
@@ -354,17 +376,7 @@ if active_bytes_key is not None:
 
     if auto_crop:
         with st.spinner("Searching for optimal crop…"):
-            best_crop = 0
-            best_score = float("inf")
-            progress = st.progress(0)
-            for c in range(0, crop_max + 1):
-                lc, rc = crop_left_right(left_img, right_img, c)
-                score = calc_diff_score(lc, rc)
-                if score < best_score:
-                    best_score = score
-                    best_crop = c
-                progress.progress((c + 1) / (crop_max + 1))
-            progress.empty()
+            best_crop, best_score = ternary_search_crop(left_img, right_img, 0, crop_max)
         st.session_state["crop_px"] = best_crop
         st.session_state["auto_crop_msg"] = f"Best crop: **{best_crop}px** — diff score `{best_score:.1f}`"
         st.rerun()

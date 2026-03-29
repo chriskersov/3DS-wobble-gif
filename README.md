@@ -142,11 +142,14 @@ The app will open at `http://localhost:8501`.
 These are improvements I plan to make:
 
 - [ ] Add a variety of example .MPO files on the website for people to try if they dont have a 3DS / .MPO file for themselves.
-- [ ] Improve the minimise diff function to first locate the subject of the image then minimise diff for just the subject. This could be done with machine learning or perhaps a depth map?
+- [ ] Improve the minimise diff function to first locate the subject of the image then minimise diff for just the subject. This could be done with machine learning or perhaps a depth map? Or the user could select a pixel range on the image and then the function would minimise that area. A more complex version of that would use lasso rather than a rectangle.
 - [ ] Add some instructions as to where to find the .MPO file on the SD card of the 3DS.
 - [ ] Take more photos on the 3DS and upload to have a nice gallery of images people can try.
 - [ ] Look at the colour range of the generated GIF and if it is possible to adjust that.
 - [ ] Add a 'best crop' for the example images.
+- [ ] Add Arthur shoutout somewhere in the README and add his LinkedIn.
+- [ ] Add motivation for people to get out there and take cool photos with their 3DS.
+- [ ] Add a community area with a place for people to post their own wobble gifs for people to see also with google account oath
 
 ## Complete
 
