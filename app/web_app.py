@@ -21,9 +21,9 @@ st.write(
 #   path  – relative path to the .mpo file
 #   label – short display name shown on the card
 EXAMPLE_FILES = [
-    {"path": "../examples/example_1.MPO", "label": "Scene 1"},
-    {"path": "../examples/example_2.MPO", "label": "Scene 2"},
-    {"path": "../examples/example_3.MPO", "label": "Scene 3"},
+    {"path": "examples/example_1.MPO", "label": "Scene 1"},
+    {"path": "examples/example_2.MPO", "label": "Scene 2"},
+    {"path": "examples/example_3.MPO", "label": "Scene 3"},
 ]
 # ───────────────────────────────────────────────────────────────────────────────
 
