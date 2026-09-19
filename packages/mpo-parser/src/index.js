@@ -1,5 +1,5 @@
 /**
- * mpoParser.js
+ * mpo-parser
  *
  * Parses a Nintendo 3DS MPO (Multi-Picture Object) file and extracts the
  * two stereo JPEG images (left eye and right eye) as separate Blob objects.
@@ -118,11 +118,26 @@ export function parseMPO(buffer) {
     throw new Error('Could not locate a second JPEG in this file. Is it a valid 3DS MPO?')
   }
 
+  // The fallback path can find false-positive 0xFFD8FF sequences inside the
+  // entropy-coded data of a single JPEG. Validate that the candidate right
+  // image is a complete JPEG (SOI + EOI) before accepting it.
+  const rightBytes = bytes.slice(fallbackOffset)
+  const rightEndsWithEOI =
+    rightBytes.length >= 2 &&
+    rightBytes[rightBytes.length - 2] === 0xff &&
+    rightBytes[rightBytes.length - 1] === 0xd9
+
+  if (!isJpegSOI(bytes, fallbackOffset) || !rightEndsWithEOI) {
+    throw new Error(
+      'Fallback scan did not locate a complete second JPEG. Is it a valid 3DS MPO?'
+    )
+  }
+
   console.log(`Fallback scan succeeded. Right image at byte offset: ${fallbackOffset}`)
 
   return toBlobs(
     bytes.slice(0, fallbackOffset),
-    bytes.slice(fallbackOffset)
+    rightBytes
   )
 }
 
