@@ -83,6 +83,31 @@ If the MPF segment is absent, stripped, or points somewhere invalid, the parser 
 
 ---
 
+## Constants
+
+Named constants are used for all magic numbers (`JPEG_SOI_0/1`, `MARKER_APP2`, `MARKER_SOS`, `TAG_MP_ENTRY`, `MP_ENTRY_SIZE`, etc.) so that their meaning is self-documenting at every point of use and changes only need to be made in one place.
+
+---
+
+## Helper Functions
+
+| Function | Purpose |
+|---|---|
+| `isJpegSOI(bytes, offset)` | Checks that two bytes at a given offset form `0xFFD8` |
+| `hasMPFIdentifier(bytes, offset)` | Checks that four bytes match `MPF\0` |
+| `isStandaloneMark(marker)` | Identifies markers that carry no length field (SOI, EOI, RST0–7, TEM) |
+| `toBlobs(leftBytes, rightBytes)` | Wraps two byte arrays in `image/jpeg` Blobs |
+
+These are extracted into named functions rather than inlined to keep the main parsing logic readable and to make individual behaviours independently testable.
+
+---
+
+## Blob Conversion Utilities
+
+`blobToImageBitmap(blob)` and `blobToDataURL(blob)` are exported as standalone async helpers. They are intentionally separate from the parsing logic so that the core parser remains synchronous and environment-agnostic — it only depends on `ArrayBuffer`, `Uint8Array`, `DataView`, and `Blob`, all of which are available in both browser and Node.js environments.
+
+---
+
 ## License
 
 MIT
