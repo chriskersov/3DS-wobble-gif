@@ -1,0 +1,35 @@
+{
+  "name": "mpo-parser",
+  "version": "0.0.0",
+  "description": "Parse Nintendo 3DS MPO stereo files into left and right JPEG images",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./fixtures": "./src/fixtures/index.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "mpo",
+    "3ds",
+    "nintendo",
+    "stereoscopic",
+    "jpeg"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@vitest/ui": "^3.2.7",
+    "jsdom": "^26.0.0",
+    "vitest": "^3.0.0"
+  },
+  "dependencies": {
+    "jpeg-js": "^0.4.4"
+  }
+}
