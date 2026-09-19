@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { parseMPO, blobToDataURL } from './index.js'
+import { SYNTHETIC_FIXTURES } from './fixtures/index.js'
 
 const EXAMPLE_DIR = resolve(import.meta.dirname, '../../../examples')
 
@@ -131,6 +132,43 @@ describe('mpo-parser on real 3DS example files', () => {
     expect(leftDims.width).toBe(rightDims.width)
     expect(leftDims.height).toBe(rightDims.height)
   })
+})
+
+describe('mpo-parser on synthetic fixtures', () => {
+  it.each(SYNTHETIC_FIXTURES)(
+    '$name — $description',
+    async ({ name, shouldPass, generate }) => {
+      const buffer = generate()
+
+      if (!shouldPass) {
+        expect(() => parseMPO(buffer)).toThrow()
+        return
+      }
+
+      const { left, right } = parseMPO(buffer)
+
+      expect(left).toBeInstanceOf(Blob)
+      expect(right).toBeInstanceOf(Blob)
+      expect(left.type).toBe('image/jpeg')
+      expect(right.type).toBe('image/jpeg')
+
+      const leftBytes = new Uint8Array(await blobToArrayBuffer(left))
+      const rightBytes = new Uint8Array(await blobToArrayBuffer(right))
+
+      expect(startsWithJpegSOI(leftBytes)).toBe(true)
+      expect(containsJpegEOI(leftBytes)).toBe(true)
+
+      expect(startsWithJpegSOI(rightBytes)).toBe(true)
+      expect(endsWithJpegEOI(rightBytes)).toBe(true)
+
+      const leftDims = readJpegDimensions(leftBytes)
+      const rightDims = readJpegDimensions(rightBytes)
+      expect(leftDims).toBeTruthy()
+      expect(rightDims).toBeTruthy()
+      expect(leftDims.width).toBe(rightDims.width)
+      expect(leftDims.height).toBe(rightDims.height)
+    }
+  )
 })
 
 describe('blobToDataURL', () => {
