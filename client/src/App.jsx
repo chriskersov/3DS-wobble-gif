@@ -3,12 +3,107 @@ import { parseMPO, blobToDataURL } from 'mpo-parser'
 import {
   alignImages,
   computeDiff,
-  createOverlayUrl,
   generateWobbleGif,
   createAnaglyphBlob,
   downloadBlob,
+  getImageDimensions,
 } from './imageUtils.js'
 import './App.css'
+
+const HORIZONTAL_LIMIT = 200
+const VIEWPORT_WIDTH = 300
+const VIEWPORT_HEIGHT = 225
+
+/**
+ * Draw the original left/right stereo pair into a fixed-size canvas with
+ * equal 50% contribution from both images. Drawing on a black background with
+ * additive blending means the overlapping region is a true 50/50 blend and
+ * neither image appears more opaque than the other.
+ */
+function OverlayCanvas({ leftUrl, rightUrl, width, height, hShift, vShift }) {
+  const canvasRef = useRef(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const ctx = canvas.getContext('2d')
+    const leftImg = new Image()
+    const rightImg = new Image()
+
+    leftImg.onload = () => {
+      rightImg.onload = () => {
+        const scaleX = width > 0 ? VIEWPORT_WIDTH / width : 1
+        const scaleY = height > 0 ? VIEWPORT_HEIGHT / height : 1
+
+        const hOffset = (Math.abs(hShift) / 2) * scaleX
+        const vOffset = (Math.abs(vShift) / 2) * scaleY
+        const hSign = hShift >= 0 ? 1 : -1
+        const vSign = vShift >= 0 ? 1 : -1
+
+        const leftTx = hSign * hOffset
+        const leftTy = vSign * vOffset
+        const rightTx = -hSign * hOffset
+        const rightTy = -vSign * vOffset
+
+        ctx.fillStyle = '#000'
+        ctx.fillRect(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
+
+        ctx.globalAlpha = 0.5
+        ctx.globalCompositeOperation = 'source-over'
+        ctx.drawImage(leftImg, leftTx, leftTy, VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
+
+        ctx.globalCompositeOperation = 'lighter'
+        ctx.drawImage(rightImg, rightTx, rightTy, VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
+
+        ctx.globalCompositeOperation = 'source-over'
+        ctx.globalAlpha = 1
+      }
+      rightImg.onerror = () => {}
+      rightImg.src = rightUrl
+    }
+    leftImg.onerror = () => {}
+    leftImg.src = leftUrl
+  }, [leftUrl, rightUrl, width, height, hShift, vShift])
+
+  return <canvas ref={canvasRef} width={VIEWPORT_WIDTH} height={VIEWPORT_HEIGHT} />
+}
+
+/**
+ * Show the computed diff image at the exact size of the overlap region shown
+ * in OverlayCanvas, centred inside the fixed viewport with black bars.
+ */
+function DiffViewport({ diffUrl, width, height, hShift, vShift }) {
+  const hCrop = Math.abs(hShift)
+  const vCrop = Math.abs(vShift)
+  const scaleX = width > 0 ? VIEWPORT_WIDTH / width : 1
+  const scaleY = height > 0 ? VIEWPORT_HEIGHT / height : 1
+
+  const imgWidth = Math.max(1, width - hCrop) * scaleX
+  const imgHeight = Math.max(1, height - vCrop) * scaleY
+  const tx = (VIEWPORT_WIDTH - imgWidth) / 2
+  const ty = (VIEWPORT_HEIGHT - imgHeight) / 2
+
+  return (
+    <div
+      className="viewport"
+      style={{ width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT }}
+    >
+      <img
+        src={diffUrl}
+        alt="Diff"
+        className="viewport-img"
+        style={{
+          width: imgWidth,
+          height: imgHeight,
+          transform: `translate(${tx}px, ${ty}px)`,
+        }}
+      />
+    </div>
+  )
+}
+
+
 
 function App() {
   const [screen, setScreen] = useState('upload')
@@ -17,13 +112,14 @@ function App() {
 
   const [leftBlob, setLeftBlob] = useState(null)
   const [rightBlob, setRightBlob] = useState(null)
+  const [leftOriginalUrl, setLeftOriginalUrl] = useState(null)
+  const [rightOriginalUrl, setRightOriginalUrl] = useState(null)
+  const [originalDims, setOriginalDims] = useState({ width: 0, height: 0 })
 
-  const [hCrop, setHCrop] = useState(0)
-  const [maxHCrop, setMaxHCrop] = useState(0)
+  const [hShift, setHShift] = useState(0)
   const [vShift, setVShift] = useState(0)
   const [maxVShift, setMaxVShift] = useState(0)
 
-  const [overlayUrl, setOverlayUrl] = useState(null)
   const [diffUrl, setDiffUrl] = useState(null)
   const [diffScore, setDiffScore] = useState(null)
 
@@ -37,18 +133,8 @@ function App() {
 
     try {
       const { left: leftAligned, right: rightAligned } = await alignImages(lBlob, rBlob, h, v)
+      const { diffUrl: dUrl, diffScore: score } = await computeDiff(leftAligned, rightAligned)
 
-      const [lUrl, rUrl] = await Promise.all([
-        blobToDataURL(leftAligned),
-        blobToDataURL(rightAligned),
-      ])
-
-      const [overlay, { diffUrl: dUrl, diffScore: score }] = await Promise.all([
-        createOverlayUrl(lUrl, rUrl),
-        computeDiff(leftAligned, rightAligned),
-      ])
-
-      setOverlayUrl(overlay)
       setDiffUrl(dUrl)
       setDiffScore(score)
     } catch (err) {
@@ -61,7 +147,6 @@ function App() {
     if (!file) return
 
     setError(null)
-    setOverlayUrl(null)
     setDiffUrl(null)
     setDiffScore(null)
     setGifUrl(null)
@@ -70,18 +155,20 @@ function App() {
       const buffer = await file.arrayBuffer()
       const { left, right } = parseMPO(buffer)
 
-      const [leftImg, rightImg] = await Promise.all([
-        createImageBitmap(left),
-        createImageBitmap(right),
+      const [dims, lUrl, rUrl] = await Promise.all([
+        getImageDimensions(left),
+        blobToDataURL(left),
+        blobToDataURL(right),
       ])
 
-      const maxH = Math.min(200, Math.max(0, Math.min(leftImg.width, rightImg.width) - 1))
-      const maxV = Math.max(0, Math.min(leftImg.height, rightImg.height) - 1)
+      const maxV = Math.max(0, dims.height - 1)
 
       setLeftBlob(left)
       setRightBlob(right)
-      setHCrop(0)
-      setMaxHCrop(maxH)
+      setLeftOriginalUrl(lUrl)
+      setRightOriginalUrl(rUrl)
+      setOriginalDims(dims)
+      setHShift(0)
       setVShift(0)
       setMaxVShift(maxV)
 
@@ -122,11 +209,12 @@ function App() {
   function handleBackToUpload() {
     setLeftBlob(null)
     setRightBlob(null)
-    setHCrop(0)
-    setMaxHCrop(0)
+    setLeftOriginalUrl(null)
+    setRightOriginalUrl(null)
+    setOriginalDims({ width: 0, height: 0 })
+    setHShift(0)
     setVShift(0)
     setMaxVShift(0)
-    setOverlayUrl(null)
     setDiffUrl(null)
     setDiffScore(null)
     setGifUrl(null)
@@ -142,7 +230,7 @@ function App() {
 
     setGifLoading(true)
     try {
-      const { left, right } = await alignImages(leftBlob, rightBlob, hCrop, vShift)
+      const { left, right } = await alignImages(leftBlob, rightBlob, hShift, vShift)
       const url = await generateWobbleGif(left, right)
       setGifUrl(url)
       setScreen('gif')
@@ -158,7 +246,7 @@ function App() {
     if (!leftBlob || !rightBlob) return
 
     try {
-      const { left, right } = await alignImages(leftBlob, rightBlob, hCrop, vShift)
+      const { left, right } = await alignImages(leftBlob, rightBlob, hShift, vShift)
       const blob = await createAnaglyphBlob(left, right)
       downloadBlob(blob, 'wobble-anaglyph.png')
     } catch (err) {
@@ -179,12 +267,12 @@ function App() {
 
   useEffect(() => {
     if (leftBlob && rightBlob) {
-      updateDerivedImages(leftBlob, rightBlob, hCrop, vShift)
+      updateDerivedImages(leftBlob, rightBlob, hShift, vShift)
     }
-  }, [hCrop, vShift, leftBlob, rightBlob, updateDerivedImages])
+  }, [hShift, vShift, leftBlob, rightBlob, updateDerivedImages])
 
-  function adjustHCrop(delta) {
-    setHCrop((prev) => Math.max(0, Math.min(maxHCrop, prev + delta)))
+  function adjustHShift(delta) {
+    setHShift((prev) => Math.max(-HORIZONTAL_LIMIT, Math.min(HORIZONTAL_LIMIT, prev + delta)))
   }
 
   function adjustVShift(delta) {
@@ -230,53 +318,80 @@ function App() {
 
       {screen === 'preview' && (
         <div className="preview-screen">
-          <div className="slider-row">
-            <label className="slider-label">Horizontal</label>
+          <div className="top-slider">
+            <div className="slider-label-row">
+              <label className="slider-label">Horizontal</label>
+              <button className="reset-button" onClick={() => setHShift(0)}>
+                RESET
+              </button>
+            </div>
             <div className="slider-controls">
-              <button onClick={() => adjustHCrop(-1)} disabled={hCrop <= 0}>-</button>
+              <button onClick={() => adjustHShift(-1)} disabled={hShift <= -HORIZONTAL_LIMIT}>
+                -
+              </button>
               <input
                 type="range"
-                min={0}
-                max={maxHCrop}
-                value={hCrop}
-                onInput={(e) => setHCrop(Number(e.target.value))}
+                min={-HORIZONTAL_LIMIT}
+                max={HORIZONTAL_LIMIT}
+                value={hShift}
+                onInput={(e) => setHShift(Number(e.target.value))}
               />
-              <button onClick={() => adjustHCrop(1)} disabled={hCrop >= maxHCrop}>+</button>
+              <button onClick={() => adjustHShift(1)} disabled={hShift >= HORIZONTAL_LIMIT}>
+                +
+              </button>
             </div>
           </div>
 
-          <div className="preview-stage">
-            <div className="vertical-slider-group">
+          <div className="preview-body">
+            <div className="left-slider">
               <label className="slider-label">Vertical</label>
-              <div className="vertical-slider-wrap">
-                <button onClick={() => adjustVShift(1)} disabled={vShift >= maxVShift}>+</button>
-                <div className="vertical-slider-track">
-                  <input
-                    type="range"
-                    className="green-thumb"
-                    min={-maxVShift}
-                    max={maxVShift}
-                    value={vShift}
-                    onInput={(e) => setVShift(Number(e.target.value))}
-                  />
-                </div>
-                <button onClick={() => adjustVShift(-1)} disabled={vShift <= -maxVShift}>-</button>
+              <button onClick={() => adjustVShift(1)} disabled={vShift >= maxVShift}>
+                +
+              </button>
+              <div className="vertical-slider-track">
+                <input
+                  type="range"
+                  className="green-thumb"
+                  min={-maxVShift}
+                  max={maxVShift}
+                  value={vShift}
+                  onInput={(e) => setVShift(Number(e.target.value))}
+                />
               </div>
+              <button onClick={() => adjustVShift(-1)} disabled={vShift <= -maxVShift}>
+                -
+              </button>
+              <button className="reset-button" onClick={() => setVShift(0)}>
+                RESET
+              </button>
             </div>
 
-            <div className="preview-right">
+            <div className="images-area">
               <div className="image-stack">
                 <div className="image-panel">
                   <h3>Overlay</h3>
-                  <div className="retro-screen">
-                    <img src={overlayUrl} alt="Overlay" />
+                  <div className="retro-screen fixed-screen">
+                    <OverlayCanvas
+                      leftUrl={leftOriginalUrl}
+                      rightUrl={rightOriginalUrl}
+                      width={originalDims.width}
+                      height={originalDims.height}
+                      hShift={hShift}
+                      vShift={vShift}
+                    />
                   </div>
                 </div>
 
                 <div className="image-panel">
                   <h3>Diff</h3>
-                  <div className="retro-screen">
-                    <img src={diffUrl} alt="Diff" />
+                  <div className="retro-screen fixed-screen">
+                    <DiffViewport
+                      diffUrl={diffUrl}
+                      width={originalDims.width}
+                      height={originalDims.height}
+                      hShift={hShift}
+                      vShift={vShift}
+                    />
                   </div>
                 </div>
               </div>
