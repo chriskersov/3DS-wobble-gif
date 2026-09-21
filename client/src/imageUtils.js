@@ -2,17 +2,20 @@ import { blobToDataURL } from 'mpo-parser'
 import { GIFEncoder, quantize, applyPalette } from 'gifenc'
 
 /**
- * Align a stereo pair by applying horizontal crop and vertical shift.
+ * Align a stereo pair by shifting the right image relative to the left and
+ * cropping to the overlapping region.
  *
- * - `hCrop`: symmetric horizontal crop. The left image loses `hCrop` pixels
- *   from its right edge; the right image loses `hCrop` pixels from its left
- *   edge. This corrects horizontal convergence errors.
- * - `vShift`: vertical shift applied to the right image. Positive values shift
- *   the right image up relative to the left; negative values shift it down.
- *   Both outputs are cropped to the overlapping region so they have identical
- *   dimensions.
+ * - `hShift`: horizontal shift. Positive values shift the right image left
+ *   (convergence); negative values shift it right. The overlap width is
+ *   `srcWidth - abs(hShift)`.
+ * - `vShift`: vertical shift. Positive values shift the right image up;
+ *   negative values shift it down. The overlap height is
+ *   `srcHeight - abs(vShift)`.
+ *
+ * Both outputs are cropped to the overlapping region so they have identical
+ * dimensions.
  */
-export async function alignImages(leftBlob, rightBlob, hCrop, vShift) {
+export async function alignImages(leftBlob, rightBlob, hShift, vShift) {
   const [left, right] = await Promise.all([
     createImageBitmap(leftBlob),
     createImageBitmap(rightBlob),
@@ -20,30 +23,39 @@ export async function alignImages(leftBlob, rightBlob, hCrop, vShift) {
 
   const srcWidth = left.width
   const srcHeight = left.height
+  const hCrop = Math.abs(hShift)
+  const vCrop = Math.abs(vShift)
+
   const destWidth = Math.max(1, srcWidth - hCrop)
-  const overlapHeight = Math.max(1, srcHeight - Math.abs(vShift))
+  const overlapHeight = Math.max(1, srcHeight - vCrop)
 
   const leftCanvas = new OffscreenCanvas(destWidth, overlapHeight)
   const rightCanvas = new OffscreenCanvas(destWidth, overlapHeight)
   const leftCtx = leftCanvas.getContext('2d')
   const rightCtx = rightCanvas.getContext('2d')
 
-  // Horizontal crop: left keeps its left side, right keeps its right side.
-  const leftSourceX = 0
-  const rightSourceX = hCrop
+  // Horizontal: sign decides which image keeps the left vs right edge.
+  let leftSourceX = 0
+  let rightSourceX = 0
 
-  // Vertical crop depends on the direction of the shift.
+  if (hShift > 0) {
+    // Right image shifted left: keep the left of the left and the right of the right.
+    rightSourceX = hCrop
+  } else if (hShift < 0) {
+    // Right image shifted right: keep the right of the left and the left of the right.
+    leftSourceX = hCrop
+  }
+
+  // Vertical: sign decides which image loses the top vs bottom pixels.
   let leftSourceY = 0
   let rightSourceY = 0
 
   if (vShift > 0) {
-    // Right image shifted up: discard `vShift` pixels from the top of the left
-    // image and from the bottom of the right image.
-    leftSourceY = vShift
+    // Right image shifted up: keep the top of the left and the bottom of the right.
+    rightSourceY = vCrop
   } else if (vShift < 0) {
-    // Right image shifted down: discard `|vShift|` pixels from the bottom of
-    // the left image and from the top of the right image.
-    rightSourceY = -vShift
+    // Right image shifted down: keep the bottom of the left and the top of the right.
+    leftSourceY = vCrop
   }
 
   leftCtx.drawImage(
@@ -76,6 +88,8 @@ export async function alignImages(leftBlob, rightBlob, hCrop, vShift) {
 
   return { left: leftOut, right: rightOut }
 }
+
+
 
 /**
  * Compute a pixel-difference image and score between two blobs.
@@ -254,4 +268,12 @@ export function downloadBlob(blob, filename) {
   a.click()
   a.remove()
   URL.revokeObjectURL(url)
+}
+
+/**
+ * Return the natural dimensions of a Blob as { width, height }.
+ */
+export async function getImageDimensions(blob) {
+  const bitmap = await createImageBitmap(blob)
+  return { width: bitmap.width, height: bitmap.height }
 }
