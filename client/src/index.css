@@ -161,13 +161,20 @@ button.green {
     4px 4px 0 0 var(--gb-shadow);
 }
 
-.retro-card {
+.retro-card,
+.retro-panel {
+  width: 100%;
+  max-width: 900px;
   background: var(--gb-body-light);
   border: 4px solid var(--gb-border);
   box-shadow:
     inset -4px -4px 0 0 var(--gb-body-dark),
     inset 4px 4px 0 0 #fff,
     6px 6px 0 0 var(--gb-shadow);
+  padding: 20px 24px;
+}
+
+.retro-card {
   padding: 24px;
 }
 
