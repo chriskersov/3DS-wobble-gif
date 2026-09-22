@@ -4,11 +4,17 @@ import {
   alignImages,
   computeDiff,
   computeDiffScore,
+  computeDiffScoreInBoxes,
+  findSubjectOffset,
   generateWobbleGif,
   createAnaglyphBlob,
   downloadBlob,
   getImageDimensions,
 } from './imageUtils.js'
+import {
+  segmentSubject,
+  maskToBoundingBox,
+} from './ml/objectDetection.js'
 import './App.css'
 
 const HORIZONTAL_LIMIT = 200
@@ -520,7 +526,7 @@ function DiffHeatmap({ data, currentHShift, currentVShift, maxVShift, loading })
 /**
  * Auto-alignment panel with diff-search and ML placeholders.
  */
-function AutoAlignPanel({ loading, message, onDiffSearch }) {
+function AutoAlignPanel({ loading, message, mlProgress, onDiffSearch, onMlAlign }) {
   return (
     <div className="auto-align-panel">
       <h3>Auto Alignment</h3>
@@ -530,9 +536,24 @@ function AutoAlignPanel({ loading, message, onDiffSearch }) {
           onClick={onDiffSearch}
           disabled={loading}
         >
-          {loading ? 'SEARCHING…' : 'AUTO: DIFF SEARCH'}
+          {loading && !mlProgress ? 'SEARCHING…' : 'AUTO: DIFF SEARCH'}
+        </button>
+        <button
+          className="auto-align-button ml"
+          onClick={onMlAlign}
+          disabled={loading}
+        >
+          {mlProgress ? `ML: ${mlProgress.text} ${Math.round(mlProgress.progress ?? 0)}%` : 'AUTO: ML'}
         </button>
       </div>
+      {mlProgress && (
+        <div className="ml-progress-bar">
+          <div
+            className="ml-progress-fill"
+            style={{ width: `${mlProgress.progress ?? 0}%` }}
+          />
+        </div>
+      )}
       {message && <div className="auto-align-message">{message}</div>}
     </div>
   )
@@ -541,11 +562,103 @@ function AutoAlignPanel({ loading, message, onDiffSearch }) {
 /**
  * Create a canvas containing the subject mask as an RGBA image.
  */
+function maskToCanvas(mask, width, height, threshold, r, g, b) {
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  const imageData = ctx.createImageData(width, height)
+
+  for (let i = 0; i < mask.length; i++) {
+    const active = mask[i] > threshold ? 1 : 0
+    imageData.data[i * 4] = r
+    imageData.data[i * 4 + 1] = g
+    imageData.data[i * 4 + 2] = b
+    imageData.data[i * 4 + 3] = active ? 120 : 0
+  }
+
+  ctx.putImageData(imageData, 0, 0)
+  return canvas
+}
+
+/**
+ * Draw subject masks and bounding boxes on top of the overlay viewport.
+ */
+function SubjectMaskOverlay({ width, height, hShift, vShift, leftMask, rightMask, leftBox, rightBox, threshold }) {
+  const canvasRef = useRef(null)
+  const leftMaskCanvasRef = useRef(null)
+  const rightMaskCanvasRef = useRef(null)
+
+  useEffect(() => {
+    leftMaskCanvasRef.current = leftMask
+      ? maskToCanvas(leftMask, width, height, threshold, 0, 255, 80)
+      : null
+    rightMaskCanvasRef.current = rightMask
+      ? maskToCanvas(rightMask, width, height, threshold, 0, 170, 255)
+      : null
+  }, [leftMask, rightMask, width, height, threshold])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const ctx = canvas.getContext('2d')
+    const scaleX = width > 0 ? VIEWPORT_WIDTH / width : 1
+    const scaleY = height > 0 ? VIEWPORT_HEIGHT / height : 1
+
+    const hOffset = (Math.abs(hShift) / 2) * scaleX
+    const vOffset = (Math.abs(vShift) / 2) * scaleY
+    const hSign = hShift >= 0 ? 1 : -1
+    const vSign = vShift >= 0 ? 1 : -1
+
+    const leftTx = hSign * hOffset
+    const leftTy = vSign * vOffset
+    const rightTx = -hSign * hOffset
+    const rightTy = -vSign * vOffset
+
+    ctx.clearRect(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
+
+    if (leftMaskCanvasRef.current) {
+      ctx.globalAlpha = 0.5
+      ctx.drawImage(leftMaskCanvasRef.current, leftTx, leftTy, VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
+    }
+    if (rightMaskCanvasRef.current) {
+      ctx.globalAlpha = 0.5
+      ctx.drawImage(rightMaskCanvasRef.current, rightTx, rightTy, VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
+    }
+    ctx.globalAlpha = 1
+
+    function drawBox(box, tx, ty, color) {
+      if (!box || box.width <= 0 || box.height <= 0) return
+      ctx.strokeStyle = color
+      ctx.lineWidth = 2
+      ctx.strokeRect(
+        box.x * scaleX + tx,
+        box.y * scaleY + ty,
+        box.width * scaleX,
+        box.height * scaleY
+      )
+    }
+
+    drawBox(leftBox, leftTx, leftTy, '#00ff50')
+    drawBox(rightBox, rightTx, rightTy, '#00aaff')
+  }, [width, height, hShift, vShift, leftBox, rightBox])
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={VIEWPORT_WIDTH}
+      height={VIEWPORT_HEIGHT}
+      className="subject-mask-overlay"
+    />
+  )
+}
+
 /**
  * Animated overlay showing how the search algorithm moved from the original
  * position to the final aligned position.
  */
-function SearchVisualization({ steps, stats, leftUrl, rightUrl, width, height }) {
+function SearchVisualization({ steps, stats, leftUrl, rightUrl, width, height, segmentations }) {
   const [index, setIndex] = useState(0)
 
   useEffect(() => {
@@ -572,6 +685,19 @@ function SearchVisualization({ steps, stats, leftUrl, rightUrl, width, height })
             hShift={step.hShift}
             vShift={step.vShift}
           />
+          {segmentations && (
+            <SubjectMaskOverlay
+              width={width}
+              height={height}
+              hShift={step.hShift}
+              vShift={step.vShift}
+              leftMask={segmentations.left.mask}
+              rightMask={segmentations.right.mask}
+              leftBox={segmentations.left.box}
+              rightBox={segmentations.right.box}
+              threshold={segmentations.left.threshold}
+            />
+          )}
         </div>
         <div className="search-viz-stats">
           <div className="stat-row">
@@ -661,6 +787,9 @@ function App() {
   const [autoAlignSteps, setAutoAlignSteps] = useState([])
   const [autoAlignStats, setAutoAlignStats] = useState(null)
   const [autoAlignMode, setAutoAlignMode] = useState(null)
+
+  const [mlProgress, setMlProgress] = useState(null)
+  const [mlSegmentations, setMlSegmentations] = useState(null)
 
   const [page, setPage] = useState('simple')
 
@@ -852,6 +981,7 @@ function App() {
     setAutoAlignSteps([])
     setAutoAlignStats(null)
     setAutoAlignMode('diff')
+    setMlSegmentations(null)
 
     const startTime = performance.now()
     const steps = []
@@ -891,6 +1021,116 @@ function App() {
       setError(err.message)
     } finally {
       setAutoAlignLoading(false)
+    }
+  }
+
+  async function handleMlAlign() {
+    if (!leftBlob || !rightBlob) return
+
+    setAutoAlignLoading(true)
+    setAutoAlignMessage(null)
+    setAutoAlignSteps([])
+    setAutoAlignStats(null)
+    setAutoAlignMode('ml')
+    setMlProgress(null)
+    setMlSegmentations(null)
+
+    const startTime = performance.now()
+    const steps = []
+
+    try {
+      // 1. Segment the subject in the left image only.
+      setMlProgress({ stage: 'segmenting subject', percent: 0 })
+      const leftSeg = await segmentSubject(leftBlob, setMlProgress)
+
+      const leftBox = maskToBoundingBox(leftSeg.mask, leftSeg.width, leftSeg.height)
+
+      if (!leftBox) {
+        throw new Error('No subject detected in the left image.')
+      }
+
+      // 2. Find that exact subject in the right image.
+      setMlProgress({ stage: 'matching subject in right image', percent: 50 })
+      const match = await findSubjectOffset(leftBlob, rightBlob, leftBox, {
+        targetWidth: 320,
+        hSearchRange: Math.min(120, Math.round(originalDims.width * 0.2)),
+        vSearchRange: Math.min(60, Math.round(originalDims.height * 0.1)),
+      })
+
+      const estimate = {
+        hShift: Number.isFinite(match.dx) ? Math.round(match.dx) : 0,
+        vShift: Number.isFinite(match.dy) ? Math.round(match.dy) : 0,
+      }
+
+      // 3. Box-constrained diff refinement around the template-match estimate.
+      const rightBox = {
+        x: leftBox.x + estimate.hShift,
+        y: leftBox.y + estimate.vShift,
+        width: leftBox.width,
+        height: leftBox.height,
+      }
+
+      async function evaluateInBox(h, v) {
+        const { diffScore: score } = await computeDiffScoreInBoxes(
+          leftBlob,
+          rightBlob,
+          h,
+          v,
+          leftBox,
+          rightBox
+        )
+        return { hShift: h, vShift: v, score }
+      }
+
+      const hWindow = 20
+      const vWindow = 10
+      const hBest = await ternarySearch1D(
+        Math.max(-HORIZONTAL_LIMIT, estimate.hShift - hWindow),
+        Math.min(HORIZONTAL_LIMIT, estimate.hShift + hWindow),
+        (h) => evaluateInBox(h, estimate.vShift),
+        steps
+      )
+
+      if (!hBest || !Number.isFinite(hBest.hShift)) {
+        throw new Error('ML horizontal refinement failed to produce a valid shift.')
+      }
+
+      const vBest = await ternarySearch1D(
+        Math.max(-maxVShift, estimate.vShift - vWindow),
+        Math.min(maxVShift, estimate.vShift + vWindow),
+        (v) => evaluateInBox(hBest.hShift, v),
+        steps
+      )
+
+      if (!vBest || !Number.isFinite(vBest.hShift) || !Number.isFinite(vBest.vShift)) {
+        throw new Error('ML refinement failed to produce a valid shift.')
+      }
+
+      const duration = Math.round(performance.now() - startTime)
+
+      setHShift(vBest.hShift)
+      setVShift(vBest.vShift)
+      setAutoAlignSteps(steps)
+      setAutoAlignStats({
+        evaluations: steps.length,
+        timeMs: duration,
+        complexity: 'O(log n)',
+      })
+      setMlSegmentations({
+        left: { ...leftSeg, box: leftBox },
+        right: { box: rightBox },
+        estimate,
+        matchConfidence: match.confidence,
+      })
+      setAutoAlignMessage(
+        `ML ALIGN: template match (conf ${match.confidence.toFixed(2)}, H ${vBest.hShift} / V ${vBest.vShift}, score ${vBest.score.toFixed(1)})`
+      )
+    } catch (err) {
+      console.error('ML auto-align failed:', err)
+      setError(err.message)
+    } finally {
+      setAutoAlignLoading(false)
+      setMlProgress(null)
     }
   }
 
@@ -1093,7 +1333,9 @@ function App() {
               <AutoAlignPanel
                 loading={autoAlignLoading}
                 message={autoAlignMessage}
+                mlProgress={mlProgress}
                 onDiffSearch={handleDiffSearchAlign}
+                onMlAlign={handleMlAlign}
               />
 
               <SearchVisualization
@@ -1104,6 +1346,7 @@ function App() {
                 rightUrl={rightOriginalUrl}
                 width={originalDims.width}
                 height={originalDims.height}
+                segmentations={autoAlignMode === 'ml' ? mlSegmentations : null}
               />
 
               {sharedHorizontalSlider}
