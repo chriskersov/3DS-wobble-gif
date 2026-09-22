@@ -355,6 +355,103 @@ export async function createAnaglyphBlob(leftBlob, rightBlob) {
 }
 
 /**
+ * Compute a diff score only within the intersection of two subject boxes
+ * after aligning the images with the given shift.
+ *
+ * `leftBox` and `rightBox` are in original image coordinates:
+ * { x, y, width, height }
+ *
+ * Returns { diffScore, pixelCount }.
+ */
+export async function computeDiffScoreInBoxes(
+  leftBlob,
+  rightBlob,
+  hShift,
+  vShift,
+  leftBox,
+  rightBox
+) {
+  const [left, right] = await Promise.all([
+    createImageBitmap(leftBlob),
+    createImageBitmap(rightBlob),
+  ])
+
+  const srcWidth = left.width
+  const srcHeight = left.height
+  const hCrop = Math.abs(hShift)
+  const vCrop = Math.abs(vShift)
+  const overlapWidth = Math.max(1, Math.round(srcWidth - hCrop))
+  const overlapHeight = Math.max(1, Math.round(srcHeight - vCrop))
+
+  // Same source-offset logic as alignImages.
+  let leftSourceX = 0
+  let rightSourceX = 0
+  let leftSourceY = 0
+  let rightSourceY = 0
+
+  if (hShift > 0) rightSourceX = hCrop
+  else if (hShift < 0) leftSourceX = hCrop
+  if (vShift > 0) rightSourceY = vCrop
+  else if (vShift < 0) leftSourceY = vCrop
+
+  // Map each subject box into the aligned overlap coordinate space.
+  const leftOverlapBox = {
+    x: leftBox.x - leftSourceX,
+    y: leftBox.y - leftSourceY,
+    width: leftBox.width,
+    height: leftBox.height,
+  }
+  const rightOverlapBox = {
+    x: rightBox.x - rightSourceX,
+    y: rightBox.y - rightSourceY,
+    width: rightBox.width,
+    height: rightBox.height,
+  }
+
+  // Intersection = region where both subjects are present in the overlap.
+  const x1 = Math.round(
+    Math.max(0, Math.max(leftOverlapBox.x, rightOverlapBox.x))
+  )
+  const y1 = Math.round(
+    Math.max(0, Math.max(leftOverlapBox.y, rightOverlapBox.y))
+  )
+  const x2 = Math.round(
+    Math.min(overlapWidth, Math.min(leftOverlapBox.x + leftOverlapBox.width, rightOverlapBox.x + rightOverlapBox.width))
+  )
+  const y2 = Math.round(
+    Math.min(overlapHeight, Math.min(leftOverlapBox.y + leftOverlapBox.height, rightOverlapBox.y + rightOverlapBox.height))
+  )
+
+  const boxWidth = Math.max(0, Math.round(x2 - x1))
+  const boxHeight = Math.max(0, Math.round(y2 - y1))
+
+  if (boxWidth === 0 || boxHeight === 0 || !Number.isFinite(boxWidth) || !Number.isFinite(boxHeight)) {
+    return { diffScore: 0, pixelCount: 0 }
+  }
+
+  const leftCanvas = new OffscreenCanvas(overlapWidth, overlapHeight)
+  const rightCanvas = new OffscreenCanvas(overlapWidth, overlapHeight)
+  const leftCtx = leftCanvas.getContext('2d')
+  const rightCtx = rightCanvas.getContext('2d')
+
+  leftCtx.drawImage(left, leftSourceX, leftSourceY, overlapWidth, overlapHeight, 0, 0, overlapWidth, overlapHeight)
+  rightCtx.drawImage(right, rightSourceX, rightSourceY, overlapWidth, overlapHeight, 0, 0, overlapWidth, overlapHeight)
+
+  const leftData = leftCtx.getImageData(x1, y1, boxWidth, boxHeight).data
+  const rightData = rightCtx.getImageData(x1, y1, boxWidth, boxHeight).data
+
+  let totalDiff = 0
+  for (let i = 0; i < leftData.length; i += 4) {
+    const dr = Math.abs(leftData[i] - rightData[i])
+    const dg = Math.abs(leftData[i + 1] - rightData[i + 1])
+    const db = Math.abs(leftData[i + 2] - rightData[i + 2])
+    totalDiff += (dr + dg + db) / 3
+  }
+
+  return { diffScore: totalDiff / (boxWidth * boxHeight), pixelCount: boxWidth * boxHeight }
+}
+
+/**
  * Trigger a browser download for a Blob.
  */
 export function downloadBlob(blob, filename) {

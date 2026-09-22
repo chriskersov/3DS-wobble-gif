@@ -520,6 +520,100 @@ function DiffHeatmap({ data, currentHShift, currentVShift, maxVShift, loading })
 /**
  * Auto-alignment panel with diff-search and ML placeholders.
  */
+function AutoAlignPanel({ loading, message, onDiffSearch }) {
+  return (
+    <div className="auto-align-panel">
+      <h3>Auto Alignment</h3>
+      <div className="auto-align-row">
+        <button
+          className="auto-align-button diff-search"
+          onClick={onDiffSearch}
+          disabled={loading}
+        >
+          {loading ? 'SEARCHING…' : 'AUTO: DIFF SEARCH'}
+        </button>
+      </div>
+      {message && <div className="auto-align-message">{message}</div>}
+    </div>
+  )
+}
+
+/**
+ * Create a canvas containing the subject mask as an RGBA image.
+ */
+/**
+ * Animated overlay showing how the search algorithm moved from the original
+ * position to the final aligned position.
+ */
+function SearchVisualization({ steps, stats, leftUrl, rightUrl, width, height }) {
+  const [index, setIndex] = useState(0)
+
+  useEffect(() => {
+    if (steps.length === 0) return
+    const interval = setInterval(() => {
+      setIndex((prev) => (prev + 1 >= steps.length ? steps.length - 1 : prev + 1))
+    }, 400)
+    return () => clearInterval(interval)
+  }, [steps])
+
+  const step = steps[index]
+  if (!step) return null
+
+  return (
+    <div className="search-viz-panel">
+      <h3>Search Visualization</h3>
+      <div className="search-viz-body">
+        <div className="search-viz-screen retro-screen fixed-screen" style={{ position: 'relative' }}>
+          <OverlayCanvas
+            leftUrl={leftUrl}
+            rightUrl={rightUrl}
+            width={width}
+            height={height}
+            hShift={step.hShift}
+            vShift={step.vShift}
+          />
+        </div>
+        <div className="search-viz-stats">
+          <div className="stat-row">
+            <span>Step</span>
+            <span>
+              {index + 1} / {steps.length}
+            </span>
+          </div>
+          <div className="stat-row">
+            <span>H shift</span>
+            <span>{step.hShift}</span>
+          </div>
+          <div className="stat-row">
+            <span>V shift</span>
+            <span>{step.vShift}</span>
+          </div>
+          <div className="stat-row">
+            <span>Score</span>
+            <span>{step.score.toFixed(1)}</span>
+          </div>
+          {stats && (
+            <>
+              <div className="stat-row">
+                <span>Evaluations</span>
+                <span>{stats.evaluations}</span>
+              </div>
+              <div className="stat-row">
+                <span>Time</span>
+                <span>{stats.timeMs} ms</span>
+              </div>
+              <div className="stat-row">
+                <span>Complexity</span>
+                <span>{stats.complexity}</span>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /**
  * Combined diff graph panel: line graph on the left, heatmap on the right.
  */
@@ -561,6 +655,12 @@ function App() {
 
   const [gifUrl, setGifUrl] = useState(null)
   const [gifLoading, setGifLoading] = useState(false)
+
+  const [autoAlignLoading, setAutoAlignLoading] = useState(false)
+  const [autoAlignMessage, setAutoAlignMessage] = useState(null)
+  const [autoAlignSteps, setAutoAlignSteps] = useState([])
+  const [autoAlignStats, setAutoAlignStats] = useState(null)
+  const [autoAlignMode, setAutoAlignMode] = useState(null)
 
   const [page, setPage] = useState('simple')
 
@@ -712,6 +812,86 @@ function App() {
 
   async function handleGenerateAdvancedGif() {
     await generateGifWithSettings(gifSettings)
+  }
+
+  async function evaluateAlignment(h, v) {
+    const { left, right } = await alignImages(leftBlob, rightBlob, h, v)
+    const score = await computeDiffScore(left, right)
+    return { hShift: h, vShift: v, score }
+  }
+
+  async function ternarySearch1D(lo, hi, evaluateFn, steps) {
+    let best = null
+    while (hi - lo > 2) {
+      const m1 = Math.floor(lo + (hi - lo) / 3)
+      const m2 = Math.floor(hi - (hi - lo) / 3)
+      const p1 = await evaluateFn(m1)
+      const p2 = await evaluateFn(m2)
+      steps.push(p1, p2)
+      if (!best || p1.score < best.score) best = p1
+      if (!best || p2.score < best.score) best = p2
+      if (p1.score < p2.score) {
+        hi = m2
+      } else {
+        lo = m1
+      }
+    }
+    for (let x = lo; x <= hi; x++) {
+      const p = await evaluateFn(x)
+      steps.push(p)
+      if (!best || p.score < best.score) best = p
+    }
+    return best
+  }
+
+  async function handleDiffSearchAlign() {
+    if (!leftBlob || !rightBlob) return
+
+    setAutoAlignLoading(true)
+    setAutoAlignMessage(null)
+    setAutoAlignSteps([])
+    setAutoAlignStats(null)
+    setAutoAlignMode('diff')
+
+    const startTime = performance.now()
+    const steps = []
+
+    try {
+      // First, search horizontally around the current vertical shift.
+      const hBest = await ternarySearch1D(
+        -HORIZONTAL_LIMIT,
+        HORIZONTAL_LIMIT,
+        (h) => evaluateAlignment(h, vShift),
+        steps
+      )
+
+      // Then, search vertically at the best horizontal shift found.
+      const vBest = await ternarySearch1D(
+        -maxVShift,
+        maxVShift,
+        (v) => evaluateAlignment(hBest.hShift, v),
+        steps
+      )
+
+      const duration = Math.round(performance.now() - startTime)
+
+      setHShift(vBest.hShift)
+      setVShift(vBest.vShift)
+      setAutoAlignSteps(steps)
+      setAutoAlignStats({
+        evaluations: steps.length,
+        timeMs: duration,
+        complexity: 'O(log n)',
+      })
+      setAutoAlignMessage(
+        `DIFF SEARCH: H ${vBest.hShift} / V ${vBest.vShift} (score ${vBest.score.toFixed(1)})`
+      )
+    } catch (err) {
+      console.error('Auto-align failed:', err)
+      setError(err.message)
+    } finally {
+      setAutoAlignLoading(false)
+    }
   }
 
   async function handleDownloadAnaglyph() {
@@ -909,6 +1089,22 @@ function App() {
           ) : (
             <div className="page-content advanced-page">
               <GifSettings settings={gifSettings} onChange={setGifSettings} />
+
+              <AutoAlignPanel
+                loading={autoAlignLoading}
+                message={autoAlignMessage}
+                onDiffSearch={handleDiffSearchAlign}
+              />
+
+              <SearchVisualization
+                key={`${autoAlignMode}-${autoAlignSteps.length}`}
+                steps={autoAlignSteps}
+                stats={autoAlignStats}
+                leftUrl={leftOriginalUrl}
+                rightUrl={rightOriginalUrl}
+                width={originalDims.width}
+                height={originalDims.height}
+              />
 
               {sharedHorizontalSlider}
 
