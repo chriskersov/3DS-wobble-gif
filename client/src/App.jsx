@@ -3,6 +3,7 @@ import { parseMPO, blobToDataURL } from 'mpo-parser'
 import {
   alignImages,
   computeDiff,
+  computeDiffScore,
   generateWobbleGif,
   createAnaglyphBlob,
   downloadBlob,
@@ -13,6 +14,8 @@ import './App.css'
 const HORIZONTAL_LIMIT = 200
 const VIEWPORT_WIDTH = 300
 const VIEWPORT_HEIGHT = 225
+const DIFF_GRAPH_H_STEP = 20
+const DIFF_GRAPH_V_STEP = 4
 
 /**
  * Draw the original left/right stereo pair into a fixed-size canvas with
@@ -313,9 +316,231 @@ function GifSettings({ settings, onChange }) {
 /**
  * Line graph: diff score vs horizontal shift at the current vertical shift.
  */
+function DiffLineGraph({ data, currentHShift, loading }) {
+  const canvasRef = useRef(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || data.length === 0) return
+
+    const width = canvas.width
+    const height = canvas.height
+    const ctx = canvas.getContext('2d')
+
+    const scores = data.map((d) => d.score)
+    const minScore = Math.min(...scores)
+    const maxScore = Math.max(...scores)
+    const scoreRange = Math.max(maxScore - minScore, 1)
+
+    const padding = 24
+    const graphWidth = width - padding * 2
+    const graphHeight = height - padding * 2
+
+    function xForH(h) {
+      return padding + ((h + HORIZONTAL_LIMIT) / (HORIZONTAL_LIMIT * 2)) * graphWidth
+    }
+
+    function yForScore(score) {
+      return padding + graphHeight - ((score - minScore) / scoreRange) * graphHeight
+    }
+
+    ctx.fillStyle = '#8bac0f'
+    ctx.fillRect(0, 0, width, height)
+
+    // Grid lines
+    ctx.strokeStyle = 'rgba(15, 56, 15, 0.2)'
+    ctx.lineWidth = 1
+    for (let h = -HORIZONTAL_LIMIT; h <= HORIZONTAL_LIMIT; h += 50) {
+      const x = xForH(h)
+      ctx.beginPath()
+      ctx.moveTo(x, padding)
+      ctx.lineTo(x, padding + graphHeight)
+      ctx.stroke()
+    }
+
+    // Plot line
+    ctx.strokeStyle = '#0f380f'
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    data.forEach((point, i) => {
+      const x = xForH(point.hShift)
+      const y = yForScore(point.score)
+      if (i === 0) ctx.moveTo(x, y)
+      else ctx.lineTo(x, y)
+    })
+    ctx.stroke()
+
+    // Current position marker
+    const currentX = xForH(currentHShift)
+    ctx.strokeStyle = '#b71c1c'
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.moveTo(currentX, padding)
+    ctx.lineTo(currentX, padding + graphHeight)
+    ctx.stroke()
+
+    // Axis labels
+    ctx.fillStyle = '#0f380f'
+    ctx.font = '10px monospace'
+    ctx.textAlign = 'center'
+    ctx.fillText('-200', padding, height - 6)
+    ctx.fillText('0', width / 2, height - 6)
+    ctx.fillText('+200', width - padding, height - 6)
+  }, [data, currentHShift])
+
+  return (
+    <div className="diff-graph retro-screen">
+      <canvas ref={canvasRef} width={300} height={225} />
+      {loading && <div className="graph-loading">SCANNING…</div>}
+    </div>
+  )
+}
+
 /**
- * Create a canvas containing the subject mask as an RGBA image.
+ * 2D heatmap: diff score over horizontal and vertical shift.
+ * X axis = horizontal shift, Y axis = vertical shift, colour = diff score.
  */
+function DiffHeatmap({ data, currentHShift, currentVShift, maxVShift, loading }) {
+  const canvasRef = useRef(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || data.length === 0) return
+
+    const width = canvas.width
+    const height = canvas.height
+    const ctx = canvas.getContext('2d')
+
+    const scores = data.map((d) => d.score)
+    const minScore = Math.min(...scores)
+    const maxScore = Math.max(...scores)
+    const scoreRange = Math.max(maxScore - minScore, 1)
+
+    const padding = 24
+    const graphWidth = width - padding * 2
+    const graphHeight = height - padding * 2
+
+    const hValues = [...new Set(data.map((d) => d.hShift))].sort((a, b) => a - b)
+    const vValues = [...new Set(data.map((d) => d.vShift))].sort((a, b) => a - b)
+
+    const cellW = graphWidth / hValues.length
+    const cellH = graphHeight / vValues.length
+
+    function colorForScore(score) {
+      const t = (score - minScore) / scoreRange
+      // Inverted heatmap: low diff = yellow, high diff = red.
+      const low = { r: 255, g: 204, b: 0 }
+      const mid = { r: 255, g: 69, b: 0 }
+      const high = { r: 51, g: 0, b: 0 }
+
+      let r, g, b
+      if (t < 0.5) {
+        const s = t * 2
+        r = Math.round(low.r + (mid.r - low.r) * s)
+        g = Math.round(low.g + (mid.g - low.g) * s)
+        b = Math.round(low.b + (mid.b - low.b) * s)
+      } else {
+        const s = (t - 0.5) * 2
+        r = Math.round(mid.r + (high.r - mid.r) * s)
+        g = Math.round(mid.g + (high.g - mid.g) * s)
+        b = Math.round(mid.b + (high.b - mid.b) * s)
+      }
+      return `rgb(${r}, ${g}, ${b})`
+    }
+
+    ctx.fillStyle = '#8bac0f'
+    ctx.fillRect(0, 0, width, height)
+
+    // Render the heatmap grid into a tiny canvas and scale it up with
+    // bilinear smoothing so the colour transitions look continuous.
+    const gridCanvas = document.createElement('canvas')
+    gridCanvas.width = hValues.length
+    gridCanvas.height = vValues.length
+    const gridCtx = gridCanvas.getContext('2d')
+
+    data.forEach((point) => {
+      const x = hValues.indexOf(point.hShift)
+      const y = vValues.indexOf(point.vShift)
+      gridCtx.fillStyle = colorForScore(point.score)
+      gridCtx.fillRect(x, y, 1, 1)
+    })
+
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(gridCanvas, padding, padding, graphWidth, graphHeight)
+
+    // Current position marker (red crosshair)
+    function interp(arr, val) {
+      const i = arr.findIndex((v) => v >= val)
+      if (i <= 0) return padding + (i < 0 ? arr.length - 1 : 0) * (arr === hValues ? cellW : cellH)
+      const v0 = arr[i - 1]
+      const v1 = arr[i]
+      const t = (val - v0) / (v1 - v0)
+      const base = padding + (i - 1) * (arr === hValues ? cellW : cellH)
+      return base + t * (arr === hValues ? cellW : cellH)
+    }
+
+    const curX = interp(hValues, currentHShift)
+    const curY = interp(vValues, currentVShift)
+
+    ctx.strokeStyle = '#b71c1c'
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.moveTo(curX, padding)
+    ctx.lineTo(curX, padding + graphHeight)
+    ctx.stroke()
+
+    ctx.beginPath()
+    ctx.moveTo(padding, curY)
+    ctx.lineTo(padding + graphWidth, curY)
+    ctx.stroke()
+
+    // Axis labels
+    ctx.fillStyle = '#0f380f'
+    ctx.font = '10px monospace'
+    ctx.textAlign = 'center'
+    ctx.fillText('-200', padding, height - 6)
+    ctx.fillText('0', width / 2, height - 6)
+    ctx.fillText('+200', width - padding, height - 6)
+
+    ctx.textAlign = 'right'
+    ctx.fillText(`+${maxVShift}`, padding - 4, padding + 8)
+    ctx.fillText('0', padding - 4, padding + graphHeight / 2 + 4)
+    ctx.fillText(`-${maxVShift}`, padding - 4, padding + graphHeight + 4)
+  }, [data, currentHShift, currentVShift, maxVShift])
+
+  return (
+    <div className="diff-graph retro-screen">
+      <canvas ref={canvasRef} width={300} height={225} />
+      {loading && <div className="graph-loading">SCANNING…</div>}
+    </div>
+  )
+}
+
+/**
+ * Auto-alignment panel with diff-search and ML placeholders.
+ */
+/**
+ * Combined diff graph panel: line graph on the left, heatmap on the right.
+ */
+function DiffGraphPanel({ lineData, lineLoading, heatmapData, heatmapLoading, currentHShift, currentVShift, maxVShift }) {
+  return (
+    <div className="diff-graph-panel">
+      <h3>Diff Score vs Shift</h3>
+      <div className="diff-graph-row">
+        <DiffLineGraph data={lineData} currentHShift={currentHShift} loading={lineLoading} />
+        <DiffHeatmap
+          data={heatmapData}
+          currentHShift={currentHShift}
+          currentVShift={currentVShift}
+          maxVShift={maxVShift}
+          loading={heatmapLoading}
+        />
+      </div>
+    </div>
+  )
+}
+
 function App() {
   const [screen, setScreen] = useState('upload')
   const [error, setError] = useState(null)
@@ -347,7 +572,14 @@ function App() {
     loop: true,
   })
 
+  const [diffGraphData, setDiffGraphData] = useState([])
+  const [diffGraphLoading, setDiffGraphLoading] = useState(false)
+  const [diffLineData, setDiffLineData] = useState([])
+  const [diffLineLoading, setDiffLineLoading] = useState(false)
+
   const fileInputRef = useRef(null)
+  const graphTimeoutRef = useRef(null)
+  const lineTimeoutRef = useRef(null)
 
   const updateDerivedImages = useCallback(async (lBlob, rBlob, h, v) => {
     if (!lBlob || !rBlob) return
@@ -371,6 +603,8 @@ function App() {
     setDiffUrl(null)
     setDiffScore(null)
     setGifUrl(null)
+    setDiffGraphData([])
+    setDiffLineData([])
 
     try {
       const buffer = await file.arrayBuffer()
@@ -440,6 +674,8 @@ function App() {
     setDiffUrl(null)
     setDiffScore(null)
     setGifUrl(null)
+    setDiffGraphData([])
+    setDiffLineData([])
     setError(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
@@ -506,6 +742,83 @@ function App() {
       updateDerivedImages(leftBlob, rightBlob, hShift, vShift)
     }
   }, [hShift, vShift, leftBlob, rightBlob, updateDerivedImages])
+
+  // Heatmap: full 2D grid of hShift x vShift. Recomputes only when the image
+  // or the vertical limit changes, not when the current vertical slider moves.
+  useEffect(() => {
+    if (!leftBlob || !rightBlob || page !== 'advanced') {
+      setDiffGraphData([])
+      setDiffGraphLoading(false)
+      return
+    }
+
+    if (graphTimeoutRef.current) {
+      clearTimeout(graphTimeoutRef.current)
+    }
+
+    setDiffGraphLoading(true)
+    graphTimeoutRef.current = setTimeout(async () => {
+      try {
+        const vLimit = Math.max(0, maxVShift)
+        const points = []
+        for (let h = -HORIZONTAL_LIMIT; h <= HORIZONTAL_LIMIT; h += DIFF_GRAPH_H_STEP) {
+          for (let v = -vLimit; v <= vLimit; v += DIFF_GRAPH_V_STEP) {
+            const { left, right } = await alignImages(leftBlob, rightBlob, h, v)
+            const score = await computeDiffScore(left, right)
+            points.push({ hShift: h, vShift: v, score })
+          }
+        }
+        setDiffGraphData(points)
+      } catch (err) {
+        console.error('Failed to compute diff heatmap:', err)
+      } finally {
+        setDiffGraphLoading(false)
+      }
+    }, 300)
+
+    return () => {
+      if (graphTimeoutRef.current) {
+        clearTimeout(graphTimeoutRef.current)
+      }
+    }
+  }, [leftBlob, rightBlob, page, maxVShift])
+
+  // Line graph: diff score vs hShift at the current vShift. Recomputes when
+  // the vertical slider moves so the slice matches the live alignment.
+  useEffect(() => {
+    if (!leftBlob || !rightBlob || page !== 'advanced') {
+      setDiffLineData([])
+      setDiffLineLoading(false)
+      return
+    }
+
+    if (lineTimeoutRef.current) {
+      clearTimeout(lineTimeoutRef.current)
+    }
+
+    setDiffLineLoading(true)
+    lineTimeoutRef.current = setTimeout(async () => {
+      try {
+        const points = []
+        for (let h = -HORIZONTAL_LIMIT; h <= HORIZONTAL_LIMIT; h += DIFF_GRAPH_H_STEP) {
+          const { left, right } = await alignImages(leftBlob, rightBlob, h, vShift)
+          const score = await computeDiffScore(left, right)
+          points.push({ hShift: h, score })
+        }
+        setDiffLineData(points)
+      } catch (err) {
+        console.error('Failed to compute diff line graph:', err)
+      } finally {
+        setDiffLineLoading(false)
+      }
+    }, 300)
+
+    return () => {
+      if (lineTimeoutRef.current) {
+        clearTimeout(lineTimeoutRef.current)
+      }
+    }
+  }, [leftBlob, rightBlob, page, vShift])
 
   const sharedVerticalSlider = (
     <VerticalSlider
@@ -607,6 +920,16 @@ function App() {
               {diffScore !== null && (
                 <div className="diff-score">DIFF SCORE: {diffScore.toFixed(1)} / 255</div>
               )}
+
+              <DiffGraphPanel
+                lineData={diffLineData}
+                lineLoading={diffLineLoading}
+                heatmapData={diffGraphData}
+                heatmapLoading={diffGraphLoading}
+                currentHShift={hShift}
+                currentVShift={vShift}
+                maxVShift={maxVShift}
+              />
 
               <div className="action-row">
                 <button

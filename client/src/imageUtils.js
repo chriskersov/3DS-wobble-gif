@@ -147,6 +147,40 @@ export async function computeDiff(leftBlob, rightBlob) {
 }
 
 /**
+ * Compute only the diff score between two blobs, without generating the
+ * diff image. Useful for batch comparisons (e.g. the diff graph).
+ */
+export async function computeDiffScore(leftBlob, rightBlob) {
+  const left = await createImageBitmap(leftBlob)
+  const right = await createImageBitmap(rightBlob)
+
+  const width = left.width
+  const height = left.height
+
+  const leftCanvas = new OffscreenCanvas(width, height)
+  const rightCanvas = new OffscreenCanvas(width, height)
+  const leftCtx = leftCanvas.getContext('2d')
+  const rightCtx = rightCanvas.getContext('2d')
+
+  leftCtx.drawImage(left, 0, 0)
+  rightCtx.drawImage(right, 0, 0)
+
+  const leftData = leftCtx.getImageData(0, 0, width, height).data
+  const rightData = rightCtx.getImageData(0, 0, width, height).data
+
+  let totalDiff = 0
+
+  for (let i = 0; i < leftData.length; i += 4) {
+    const dr = Math.abs(leftData[i] - rightData[i])
+    const dg = Math.abs(leftData[i + 1] - rightData[i + 1])
+    const db = Math.abs(leftData[i + 2] - rightData[i + 2])
+    totalDiff += (dr + dg + db) / 3
+  }
+
+  return totalDiff / (width * height)
+}
+
+/**
  * Draw two images on top of each other with 50% opacity and return the
  * result as a JPEG data URL. Useful for visually checking stereo alignment.
  */
