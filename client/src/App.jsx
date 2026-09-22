@@ -85,10 +85,7 @@ function DiffViewport({ diffUrl, width, height, hShift, vShift }) {
   const ty = (VIEWPORT_HEIGHT - imgHeight) / 2
 
   return (
-    <div
-      className="viewport"
-      style={{ width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT }}
-    >
+    <div className="viewport" style={{ width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT }}>
       <img
         src={diffUrl}
         alt="Diff"
@@ -103,8 +100,222 @@ function DiffViewport({ diffUrl, width, height, hShift, vShift }) {
   )
 }
 
+/**
+ * Game Boy cartridge slot page switcher.
+ */
+function CartridgeSwitcher({ page, onChange }) {
+  return (
+    <div className="cartridge-switcher">
+      <button
+        className={`cartridge ${page === 'simple' ? 'inserted' : ''}`}
+        onClick={() => onChange('simple')}
+        aria-pressed={page === 'simple'}
+      >
+        <span className="cartridge-label">SIMPLE</span>
+      </button>
+      <button
+        className={`cartridge ${page === 'advanced' ? 'inserted' : ''}`}
+        onClick={() => onChange('advanced')}
+        aria-pressed={page === 'advanced'}
+      >
+        <span className="cartridge-label">ADVANCED</span>
+      </button>
+    </div>
+  )
+}
 
+/**
+ * Horizontal shift slider placed between the overlay and diff images.
+ */
+function HorizontalSlider({ hShift, onHShiftChange }) {
+  function adjust(delta) {
+    onHShiftChange((prev) => Math.max(-HORIZONTAL_LIMIT, Math.min(HORIZONTAL_LIMIT, prev + delta)))
+  }
 
+  return (
+    <div className="horizontal-slider">
+      <div className="slider-label-row">
+        <label className="slider-label">Horizontal</label>
+        <button className="reset-button" onClick={() => onHShiftChange(0)}>
+          RESET
+        </button>
+      </div>
+      <div className="slider-controls">
+        <button onClick={() => adjust(-1)} disabled={hShift <= -HORIZONTAL_LIMIT}>
+          -
+        </button>
+        <input
+          type="range"
+          min={-HORIZONTAL_LIMIT}
+          max={HORIZONTAL_LIMIT}
+          value={hShift}
+          onInput={(e) => onHShiftChange(Number(e.target.value))}
+        />
+        <button onClick={() => adjust(1)} disabled={hShift >= HORIZONTAL_LIMIT}>
+          +
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Vertical shift slider placed in the left column next to the previews.
+ */
+function VerticalSlider({ vShift, maxVShift, onVShiftChange }) {
+  function adjust(delta) {
+    onVShiftChange((prev) => Math.max(-maxVShift, Math.min(maxVShift, prev + delta)))
+  }
+
+  return (
+    <div className="vertical-slider">
+      <label className="slider-label">Vertical</label>
+      <button onClick={() => adjust(1)} disabled={vShift >= maxVShift}>
+        +
+      </button>
+      <div className="vertical-slider-track">
+        <input
+          type="range"
+          className="green-thumb"
+          min={-maxVShift}
+          max={maxVShift}
+          value={vShift}
+          onInput={(e) => onVShiftChange(Number(e.target.value))}
+        />
+      </div>
+      <button onClick={() => adjust(-1)} disabled={vShift <= -maxVShift}>
+        -
+      </button>
+      <button className="reset-button" onClick={() => onVShiftChange(0)}>
+        RESET
+      </button>
+    </div>
+  )
+}
+
+/**
+ * Side-by-side overlay and diff preview panels.
+ */
+function PreviewPanels({ leftOriginalUrl, rightOriginalUrl, originalDims, hShift, vShift, diffUrl }) {
+  return (
+    <div className="image-stack">
+      <div className="image-panel">
+        <h3>Overlay</h3>
+        <div className="retro-screen fixed-screen">
+          <OverlayCanvas
+            leftUrl={leftOriginalUrl}
+            rightUrl={rightOriginalUrl}
+            width={originalDims.width}
+            height={originalDims.height}
+            hShift={hShift}
+            vShift={vShift}
+          />
+        </div>
+      </div>
+
+      <div className="image-panel">
+        <h3>Diff</h3>
+        <div className="retro-screen fixed-screen">
+          <DiffViewport
+            diffUrl={diffUrl}
+            width={originalDims.width}
+            height={originalDims.height}
+            hShift={hShift}
+            vShift={vShift}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Advanced GIF generation settings panel.
+ */
+function GifSettings({ settings, onChange }) {
+  return (
+    <div className="gif-settings">
+      <h3>GIF Settings</h3>
+
+      <div className="setting-row">
+        <label>Frame delay</label>
+        <div className="setting-control">
+          <input
+            type="range"
+            min={50}
+            max={1000}
+            step={50}
+            value={settings.delayMs}
+            onInput={(e) => onChange({ ...settings, delayMs: Number(e.target.value) })}
+          />
+          <span>{settings.delayMs} ms</span>
+        </div>
+      </div>
+
+      <div className="setting-row">
+        <label>Cycles</label>
+        <div className="setting-control">
+          <input
+            type="range"
+            min={1}
+            max={5}
+            step={1}
+            value={settings.cycles}
+            onInput={(e) => onChange({ ...settings, cycles: Number(e.target.value) })}
+          />
+          <span>{settings.cycles}</span>
+        </div>
+      </div>
+
+      <div className="setting-row">
+        <label>Crossfade</label>
+        <div className="setting-control">
+          <input
+            type="range"
+            min={0}
+            max={8}
+            step={1}
+            value={settings.crossfadeSteps}
+            onInput={(e) => onChange({ ...settings, crossfadeSteps: Number(e.target.value) })}
+          />
+          <span>{settings.crossfadeSteps} frames</span>
+        </div>
+      </div>
+
+      <div className="setting-row">
+        <label>Scale</label>
+        <div className="setting-control">
+          <input
+            type="range"
+            min={0.25}
+            max={1.0}
+            step={0.05}
+            value={settings.scale}
+            onInput={(e) => onChange({ ...settings, scale: Number(e.target.value) })}
+          />
+          <span>{Math.round(settings.scale * 100)}%</span>
+        </div>
+      </div>
+
+      <div className="setting-row loop-row">
+        <label>Loop forever</label>
+        <button
+          className={`loop-toggle ${settings.loop ? 'on' : 'off'}`}
+          onClick={() => onChange({ ...settings, loop: !settings.loop })}
+        >
+          {settings.loop ? 'ON' : 'OFF'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Line graph: diff score vs horizontal shift at the current vertical shift.
+ */
+/**
+ * Create a canvas containing the subject mask as an RGBA image.
+ */
 function App() {
   const [screen, setScreen] = useState('upload')
   const [error, setError] = useState(null)
@@ -125,6 +336,16 @@ function App() {
 
   const [gifUrl, setGifUrl] = useState(null)
   const [gifLoading, setGifLoading] = useState(false)
+
+  const [page, setPage] = useState('simple')
+
+  const [gifSettings, setGifSettings] = useState({
+    delayMs: 300,
+    cycles: 1,
+    crossfadeSteps: 0,
+    scale: 1.0,
+    loop: true,
+  })
 
   const fileInputRef = useRef(null)
 
@@ -161,7 +382,7 @@ function App() {
         blobToDataURL(right),
       ])
 
-      const maxV = Math.max(0, dims.height - 1)
+      const maxV = Math.max(0, Math.round(dims.height * 0.05))
 
       setLeftBlob(left)
       setRightBlob(right)
@@ -171,6 +392,7 @@ function App() {
       setHShift(0)
       setVShift(0)
       setMaxVShift(maxV)
+      setPage('simple')
 
       await updateDerivedImages(left, right, 0, 0)
       setScreen('preview')
@@ -225,13 +447,13 @@ function App() {
     setScreen('upload')
   }
 
-  async function handleCreateGif() {
+  async function generateGifWithSettings(settings) {
     if (!leftBlob || !rightBlob) return
 
     setGifLoading(true)
     try {
       const { left, right } = await alignImages(leftBlob, rightBlob, hShift, vShift)
-      const url = await generateWobbleGif(left, right)
+      const url = await generateWobbleGif(left, right, settings)
       setGifUrl(url)
       setScreen('gif')
     } catch (err) {
@@ -240,6 +462,20 @@ function App() {
     } finally {
       setGifLoading(false)
     }
+  }
+
+  async function handleCreateGif() {
+    await generateGifWithSettings({
+      delayMs: 300,
+      cycles: 1,
+      crossfadeSteps: 0,
+      scale: 1.0,
+      loop: true,
+    })
+  }
+
+  async function handleGenerateAdvancedGif() {
+    await generateGifWithSettings(gifSettings)
   }
 
   async function handleDownloadAnaglyph() {
@@ -271,13 +507,28 @@ function App() {
     }
   }, [hShift, vShift, leftBlob, rightBlob, updateDerivedImages])
 
-  function adjustHShift(delta) {
-    setHShift((prev) => Math.max(-HORIZONTAL_LIMIT, Math.min(HORIZONTAL_LIMIT, prev + delta)))
-  }
+  const sharedVerticalSlider = (
+    <VerticalSlider
+      vShift={vShift}
+      maxVShift={maxVShift}
+      onVShiftChange={setVShift}
+    />
+  )
 
-  function adjustVShift(delta) {
-    setVShift((prev) => Math.max(-maxVShift, Math.min(maxVShift, prev + delta)))
-  }
+  const sharedHorizontalSlider = (
+    <HorizontalSlider hShift={hShift} onHShiftChange={setHShift} />
+  )
+
+  const sharedPreviewPanels = (
+    <PreviewPanels
+      leftOriginalUrl={leftOriginalUrl}
+      rightOriginalUrl={rightOriginalUrl}
+      originalDims={originalDims}
+      hShift={hShift}
+      vShift={vShift}
+      diffUrl={diffUrl}
+    />
+  )
 
   return (
     <div className="app">
@@ -310,7 +561,7 @@ function App() {
             <div className="upload-hint">Drag & drop or click to choose</div>
           </div>
 
-          <p style={{ textAlign: 'center', color: 'var(--gb-text-light)', maxWidth: '500px' }}>
+          <p className="privacy-hint">
             All processing happens locally in your browser. No images are uploaded.
           </p>
         </div>
@@ -318,82 +569,15 @@ function App() {
 
       {screen === 'preview' && (
         <div className="preview-screen">
-          <div className="top-slider">
-            <div className="slider-label-row">
-              <label className="slider-label">Horizontal</label>
-              <button className="reset-button" onClick={() => setHShift(0)}>
-                RESET
-              </button>
-            </div>
-            <div className="slider-controls">
-              <button onClick={() => adjustHShift(-1)} disabled={hShift <= -HORIZONTAL_LIMIT}>
-                -
-              </button>
-              <input
-                type="range"
-                min={-HORIZONTAL_LIMIT}
-                max={HORIZONTAL_LIMIT}
-                value={hShift}
-                onInput={(e) => setHShift(Number(e.target.value))}
-              />
-              <button onClick={() => adjustHShift(1)} disabled={hShift >= HORIZONTAL_LIMIT}>
-                +
-              </button>
-            </div>
-          </div>
+          <CartridgeSwitcher page={page} onChange={setPage} />
 
-          <div className="preview-body">
-            <div className="left-slider">
-              <label className="slider-label">Vertical</label>
-              <button onClick={() => adjustVShift(1)} disabled={vShift >= maxVShift}>
-                +
-              </button>
-              <div className="vertical-slider-track">
-                <input
-                  type="range"
-                  className="green-thumb"
-                  min={-maxVShift}
-                  max={maxVShift}
-                  value={vShift}
-                  onInput={(e) => setVShift(Number(e.target.value))}
-                />
-              </div>
-              <button onClick={() => adjustVShift(-1)} disabled={vShift <= -maxVShift}>
-                -
-              </button>
-              <button className="reset-button" onClick={() => setVShift(0)}>
-                RESET
-              </button>
-            </div>
+          {page === 'simple' ? (
+            <div className="page-content simple-page">
+              {sharedHorizontalSlider}
 
-            <div className="images-area">
-              <div className="image-stack">
-                <div className="image-panel">
-                  <h3>Overlay</h3>
-                  <div className="retro-screen fixed-screen">
-                    <OverlayCanvas
-                      leftUrl={leftOriginalUrl}
-                      rightUrl={rightOriginalUrl}
-                      width={originalDims.width}
-                      height={originalDims.height}
-                      hShift={hShift}
-                      vShift={vShift}
-                    />
-                  </div>
-                </div>
-
-                <div className="image-panel">
-                  <h3>Diff</h3>
-                  <div className="retro-screen fixed-screen">
-                    <DiffViewport
-                      diffUrl={diffUrl}
-                      width={originalDims.width}
-                      height={originalDims.height}
-                      hShift={hShift}
-                      vShift={vShift}
-                    />
-                  </div>
-                </div>
+              <div className="preview-body">
+                {sharedVerticalSlider}
+                {sharedPreviewPanels}
               </div>
 
               {diffScore !== null && (
@@ -409,12 +593,42 @@ function App() {
                 </button>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="page-content advanced-page">
+              <GifSettings settings={gifSettings} onChange={setGifSettings} />
+
+              {sharedHorizontalSlider}
+
+              <div className="preview-body">
+                {sharedVerticalSlider}
+                {sharedPreviewPanels}
+              </div>
+
+              {diffScore !== null && (
+                <div className="diff-score">DIFF SCORE: {diffScore.toFixed(1)} / 255</div>
+              )}
+
+              <div className="action-row">
+                <button
+                  className="red"
+                  onClick={handleGenerateAdvancedGif}
+                  disabled={gifLoading}
+                >
+                  {gifLoading ? 'WORKING…' : 'GENERATE GIF'}
+                </button>
+                <button className="grey" onClick={handleBackToUpload}>
+                  BACK
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {screen === 'gif' && (
         <div className="gif-screen">
+          <CartridgeSwitcher page={page} onChange={setPage} />
+
           <h2>Your Wobble GIF</h2>
 
           <div className="retro-screen gif-preview">

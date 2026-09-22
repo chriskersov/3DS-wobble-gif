@@ -26,8 +26,8 @@ export async function alignImages(leftBlob, rightBlob, hShift, vShift) {
   const hCrop = Math.abs(hShift)
   const vCrop = Math.abs(vShift)
 
-  const destWidth = Math.max(1, srcWidth - hCrop)
-  const overlapHeight = Math.max(1, srcHeight - vCrop)
+  const destWidth = Math.max(1, Math.round(srcWidth - hCrop))
+  const overlapHeight = Math.max(1, Math.round(srcHeight - vCrop))
 
   const leftCanvas = new OffscreenCanvas(destWidth, overlapHeight)
   const rightCanvas = new OffscreenCanvas(destWidth, overlapHeight)
@@ -179,33 +179,97 @@ export function createOverlayUrl(leftUrl, rightUrl) {
 }
 
 /**
- * Generate a simple looping wobble GIF from an aligned stereo pair.
+ * Generate a looping wobble GIF from an aligned stereo pair.
+ *
+ * Options:
+ * - delayMs: frame delay in milliseconds (default 300)
+ * - cycles: number of full left→right→left cycles (default 1)
+ * - crossfadeSteps: number of blended intermediate frames per transition
+ *                   (default 0 = hard cut)
+ * - scale: output scale relative to the aligned input (default 1.0)
+ * - loop: whether the GIF loops forever (default true)
+ *
  * Returns an object URL for the generated GIF.
  */
-export async function generateWobbleGif(leftBlob, rightBlob, delayMs = 300) {
-  const [left, right] = await Promise.all([
+export async function generateWobbleGif(leftBlob, rightBlob, options = {}) {
+  const {
+    delayMs = 300,
+    cycles = 1,
+    crossfadeSteps = 0,
+    scale = 1.0,
+    loop = true,
+  } = options
+
+  let [left, right] = await Promise.all([
     createImageBitmap(leftBlob),
     createImageBitmap(rightBlob),
   ])
 
-  const width = left.width
-  const height = left.height
-  const encoder = GIFEncoder()
+  let width = left.width
+  let height = left.height
 
+  if (scale > 0 && scale !== 1.0) {
+    width = Math.max(1, Math.round(width * scale))
+    height = Math.max(1, Math.round(height * scale))
+    const scaledLeftCanvas = new OffscreenCanvas(width, height)
+    const scaledRightCanvas = new OffscreenCanvas(width, height)
+    const slCtx = scaledLeftCanvas.getContext('2d')
+    const srCtx = scaledRightCanvas.getContext('2d')
+    slCtx.drawImage(left, 0, 0, width, height)
+    srCtx.drawImage(right, 0, 0, width, height)
+    left = await createImageBitmap(scaledLeftCanvas)
+    right = await createImageBitmap(scaledRightCanvas)
+  }
+
+  const encoder = GIFEncoder()
   const canvas = new OffscreenCanvas(width, height)
   const ctx = canvas.getContext('2d')
 
-  const frames = [left, right]
-  for (const frame of frames) {
+  function writeFrame(imageBitmap, delay, repeat = 0) {
     ctx.clearRect(0, 0, width, height)
-    ctx.drawImage(frame, 0, 0)
+    ctx.drawImage(imageBitmap, 0, 0)
     const { data } = ctx.getImageData(0, 0, width, height)
     const palette = quantize(data, 256)
     const index = applyPalette(data, palette)
-    encoder.writeFrame(index, width, height, {
-      palette,
-      delay: delayMs,
-    })
+    encoder.writeFrame(index, width, height, { palette, delay, repeat })
+  }
+
+  function crossfade(from, to, steps) {
+    const frames = []
+    for (let i = 1; i <= steps; i++) {
+      const alpha = i / (steps + 1)
+      const fadeCanvas = new OffscreenCanvas(width, height)
+      const fadeCtx = fadeCanvas.getContext('2d')
+      fadeCtx.drawImage(from, 0, 0)
+      fadeCtx.globalAlpha = alpha
+      fadeCtx.drawImage(to, 0, 0)
+      frames.push(fadeCanvas.transferToImageBitmap())
+    }
+    return frames
+  }
+
+  const fadeDelay = crossfadeSteps > 0
+    ? Math.max(20, Math.round(delayMs / (crossfadeSteps + 1)))
+    : delayMs
+
+  for (let c = 0; c < cycles; c++) {
+    writeFrame(left, delayMs, c === 0 ? (loop ? 0 : -1) : undefined)
+
+    if (crossfadeSteps > 0) {
+      const fadeFrames = crossfade(left, right, crossfadeSteps)
+      for (const frame of fadeFrames) {
+        writeFrame(frame, fadeDelay)
+      }
+    }
+
+    writeFrame(right, delayMs)
+
+    if (crossfadeSteps > 0) {
+      const fadeFrames = crossfade(right, left, crossfadeSteps)
+      for (const frame of fadeFrames) {
+        writeFrame(frame, fadeDelay)
+      }
+    }
   }
 
   const bytes = encoder.bytes()
