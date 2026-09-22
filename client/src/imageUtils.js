@@ -216,7 +216,8 @@ export function createOverlayUrl(leftUrl, rightUrl) {
  * Generate a looping wobble GIF from an aligned stereo pair.
  *
  * Options:
- * - delayMs: frame delay in milliseconds (default 300)
+ * - delayMs: hold delay in milliseconds for left/right frames (default 300)
+ * - transitionDelayMs: delay per crossfade frame in milliseconds (default 100)
  * - cycles: number of full left→right→left cycles (default 1)
  * - crossfadeSteps: number of blended intermediate frames per transition
  *                   (default 0 = hard cut)
@@ -228,6 +229,7 @@ export function createOverlayUrl(leftUrl, rightUrl) {
 export async function generateWobbleGif(leftBlob, rightBlob, options = {}) {
   const {
     delayMs = 300,
+    transitionDelayMs = 100,
     cycles = 1,
     crossfadeSteps = 0,
     scale = 1.0,
@@ -282,9 +284,7 @@ export async function generateWobbleGif(leftBlob, rightBlob, options = {}) {
     return frames
   }
 
-  const fadeDelay = crossfadeSteps > 0
-    ? Math.max(20, Math.round(delayMs / (crossfadeSteps + 1)))
-    : delayMs
+  const fadeDelay = crossfadeSteps > 0 ? Math.max(20, transitionDelayMs) : delayMs
 
   for (let c = 0; c < cycles; c++) {
     writeFrame(left, delayMs, c === 0 ? (loop ? 0 : -1) : undefined)
