@@ -2,17 +2,20 @@ import { blobToDataURL } from 'mpo-parser'
 import { GIFEncoder, quantize, applyPalette } from 'gifenc'
 
 /**
- * Align a stereo pair by applying horizontal crop and vertical shift.
+ * Align a stereo pair by shifting the right image relative to the left and
+ * cropping to the overlapping region.
  *
- * - `hCrop`: symmetric horizontal crop. The left image loses `hCrop` pixels
- *   from its right edge; the right image loses `hCrop` pixels from its left
- *   edge. This corrects horizontal convergence errors.
- * - `vShift`: vertical shift applied to the right image. Positive values shift
- *   the right image up relative to the left; negative values shift it down.
- *   Both outputs are cropped to the overlapping region so they have identical
- *   dimensions.
+ * - `hShift`: horizontal shift. Positive values shift the right image left
+ *   (convergence); negative values shift it right. The overlap width is
+ *   `srcWidth - abs(hShift)`.
+ * - `vShift`: vertical shift. Positive values shift the right image up;
+ *   negative values shift it down. The overlap height is
+ *   `srcHeight - abs(vShift)`.
+ *
+ * Both outputs are cropped to the overlapping region so they have identical
+ * dimensions.
  */
-export async function alignImages(leftBlob, rightBlob, hCrop, vShift) {
+export async function alignImages(leftBlob, rightBlob, hShift, vShift) {
   const [left, right] = await Promise.all([
     createImageBitmap(leftBlob),
     createImageBitmap(rightBlob),
@@ -20,30 +23,39 @@ export async function alignImages(leftBlob, rightBlob, hCrop, vShift) {
 
   const srcWidth = left.width
   const srcHeight = left.height
-  const destWidth = Math.max(1, srcWidth - hCrop)
-  const overlapHeight = Math.max(1, srcHeight - Math.abs(vShift))
+  const hCrop = Math.abs(hShift)
+  const vCrop = Math.abs(vShift)
+
+  const destWidth = Math.max(1, Math.round(srcWidth - hCrop))
+  const overlapHeight = Math.max(1, Math.round(srcHeight - vCrop))
 
   const leftCanvas = new OffscreenCanvas(destWidth, overlapHeight)
   const rightCanvas = new OffscreenCanvas(destWidth, overlapHeight)
   const leftCtx = leftCanvas.getContext('2d')
   const rightCtx = rightCanvas.getContext('2d')
 
-  // Horizontal crop: left keeps its left side, right keeps its right side.
-  const leftSourceX = 0
-  const rightSourceX = hCrop
+  // Horizontal: sign decides which image keeps the left vs right edge.
+  let leftSourceX = 0
+  let rightSourceX = 0
 
-  // Vertical crop depends on the direction of the shift.
+  if (hShift > 0) {
+    // Right image shifted left: keep the left of the left and the right of the right.
+    rightSourceX = hCrop
+  } else if (hShift < 0) {
+    // Right image shifted right: keep the right of the left and the left of the right.
+    leftSourceX = hCrop
+  }
+
+  // Vertical: sign decides which image loses the top vs bottom pixels.
   let leftSourceY = 0
   let rightSourceY = 0
 
   if (vShift > 0) {
-    // Right image shifted up: discard `vShift` pixels from the top of the left
-    // image and from the bottom of the right image.
-    leftSourceY = vShift
+    // Right image shifted up: keep the top of the left and the bottom of the right.
+    rightSourceY = vCrop
   } else if (vShift < 0) {
-    // Right image shifted down: discard `|vShift|` pixels from the bottom of
-    // the left image and from the top of the right image.
-    rightSourceY = -vShift
+    // Right image shifted down: keep the bottom of the left and the top of the right.
+    leftSourceY = vCrop
   }
 
   leftCtx.drawImage(
@@ -76,6 +88,8 @@ export async function alignImages(leftBlob, rightBlob, hCrop, vShift) {
 
   return { left: leftOut, right: rightOut }
 }
+
+
 
 /**
  * Compute a pixel-difference image and score between two blobs.
@@ -165,33 +179,97 @@ export function createOverlayUrl(leftUrl, rightUrl) {
 }
 
 /**
- * Generate a simple looping wobble GIF from an aligned stereo pair.
+ * Generate a looping wobble GIF from an aligned stereo pair.
+ *
+ * Options:
+ * - delayMs: frame delay in milliseconds (default 300)
+ * - cycles: number of full left→right→left cycles (default 1)
+ * - crossfadeSteps: number of blended intermediate frames per transition
+ *                   (default 0 = hard cut)
+ * - scale: output scale relative to the aligned input (default 1.0)
+ * - loop: whether the GIF loops forever (default true)
+ *
  * Returns an object URL for the generated GIF.
  */
-export async function generateWobbleGif(leftBlob, rightBlob, delayMs = 300) {
-  const [left, right] = await Promise.all([
+export async function generateWobbleGif(leftBlob, rightBlob, options = {}) {
+  const {
+    delayMs = 300,
+    cycles = 1,
+    crossfadeSteps = 0,
+    scale = 1.0,
+    loop = true,
+  } = options
+
+  let [left, right] = await Promise.all([
     createImageBitmap(leftBlob),
     createImageBitmap(rightBlob),
   ])
 
-  const width = left.width
-  const height = left.height
-  const encoder = GIFEncoder()
+  let width = left.width
+  let height = left.height
 
+  if (scale > 0 && scale !== 1.0) {
+    width = Math.max(1, Math.round(width * scale))
+    height = Math.max(1, Math.round(height * scale))
+    const scaledLeftCanvas = new OffscreenCanvas(width, height)
+    const scaledRightCanvas = new OffscreenCanvas(width, height)
+    const slCtx = scaledLeftCanvas.getContext('2d')
+    const srCtx = scaledRightCanvas.getContext('2d')
+    slCtx.drawImage(left, 0, 0, width, height)
+    srCtx.drawImage(right, 0, 0, width, height)
+    left = await createImageBitmap(scaledLeftCanvas)
+    right = await createImageBitmap(scaledRightCanvas)
+  }
+
+  const encoder = GIFEncoder()
   const canvas = new OffscreenCanvas(width, height)
   const ctx = canvas.getContext('2d')
 
-  const frames = [left, right]
-  for (const frame of frames) {
+  function writeFrame(imageBitmap, delay, repeat = 0) {
     ctx.clearRect(0, 0, width, height)
-    ctx.drawImage(frame, 0, 0)
+    ctx.drawImage(imageBitmap, 0, 0)
     const { data } = ctx.getImageData(0, 0, width, height)
     const palette = quantize(data, 256)
     const index = applyPalette(data, palette)
-    encoder.writeFrame(index, width, height, {
-      palette,
-      delay: delayMs,
-    })
+    encoder.writeFrame(index, width, height, { palette, delay, repeat })
+  }
+
+  function crossfade(from, to, steps) {
+    const frames = []
+    for (let i = 1; i <= steps; i++) {
+      const alpha = i / (steps + 1)
+      const fadeCanvas = new OffscreenCanvas(width, height)
+      const fadeCtx = fadeCanvas.getContext('2d')
+      fadeCtx.drawImage(from, 0, 0)
+      fadeCtx.globalAlpha = alpha
+      fadeCtx.drawImage(to, 0, 0)
+      frames.push(fadeCanvas.transferToImageBitmap())
+    }
+    return frames
+  }
+
+  const fadeDelay = crossfadeSteps > 0
+    ? Math.max(20, Math.round(delayMs / (crossfadeSteps + 1)))
+    : delayMs
+
+  for (let c = 0; c < cycles; c++) {
+    writeFrame(left, delayMs, c === 0 ? (loop ? 0 : -1) : undefined)
+
+    if (crossfadeSteps > 0) {
+      const fadeFrames = crossfade(left, right, crossfadeSteps)
+      for (const frame of fadeFrames) {
+        writeFrame(frame, fadeDelay)
+      }
+    }
+
+    writeFrame(right, delayMs)
+
+    if (crossfadeSteps > 0) {
+      const fadeFrames = crossfade(right, left, crossfadeSteps)
+      for (const frame of fadeFrames) {
+        writeFrame(frame, fadeDelay)
+      }
+    }
   }
 
   const bytes = encoder.bytes()
@@ -254,4 +332,12 @@ export function downloadBlob(blob, filename) {
   a.click()
   a.remove()
   URL.revokeObjectURL(url)
+}
+
+/**
+ * Return the natural dimensions of a Blob as { width, height }.
+ */
+export async function getImageDimensions(blob) {
+  const bitmap = await createImageBitmap(blob)
+  return { width: bitmap.width, height: bitmap.height }
 }
