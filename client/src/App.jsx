@@ -110,6 +110,26 @@ function DiffViewport({ diffUrl, width, height, hShift, vShift }) {
 }
 
 /**
+ * Collapsible retro panel with a toggle button.
+ */
+function DropdownPanel({ title, children }) {
+  const [isOpen, setIsOpen] = useState(false)
+
+  return (
+    <div className="retro-panel dropdown-panel">
+      <button
+        className="dropdown-toggle"
+        onClick={() => setIsOpen((prev) => !prev)}
+        aria-expanded={isOpen}
+      >
+        {isOpen ? `Hide ${title}` : `View ${title}`}
+      </button>
+      {isOpen && <div className="dropdown-content">{children}</div>}
+    </div>
+  )
+}
+
+/**
  * Game Boy cartridge slot page switcher.
  */
 function CartridgeSwitcher({ page, onChange }) {
@@ -134,23 +154,30 @@ function CartridgeSwitcher({ page, onChange }) {
 }
 
 /**
- * Horizontal shift slider placed between the overlay and diff images.
+ * Horizontal shift slider.
+ * `compact` hides the label and fits the - / + buttons to the image width.
  */
-function HorizontalSlider({ hShift, onHShiftChange }) {
+function HorizontalSlider({ compact, hShift, onHShiftChange }) {
   function adjust(delta) {
     onHShiftChange((prev) => Math.max(-HORIZONTAL_LIMIT, Math.min(HORIZONTAL_LIMIT, prev + delta)))
   }
 
   return (
-    <div className="horizontal-slider">
-      <div className="slider-label-row">
-        <label className="slider-label">Horizontal</label>
+    <div className={`horizontal-slider ${compact ? 'compact' : ''}`}>
+      {compact ? (
         <button className="reset-button" onClick={() => onHShiftChange(0)}>
           RESET
         </button>
-      </div>
+      ) : (
+        <div className="slider-label-row">
+          <label className="slider-label">Horizontal</label>
+          <button className="reset-button" onClick={() => onHShiftChange(0)}>
+            RESET
+          </button>
+        </div>
+      )}
       <div className="slider-controls">
-        <button onClick={() => adjust(-1)} disabled={hShift <= -HORIZONTAL_LIMIT}>
+        <button className="step-button left" onClick={() => adjust(-1)} disabled={hShift <= -HORIZONTAL_LIMIT}>
           -
         </button>
         <input
@@ -160,7 +187,7 @@ function HorizontalSlider({ hShift, onHShiftChange }) {
           value={hShift}
           onInput={(e) => onHShiftChange(Number(e.target.value))}
         />
-        <button onClick={() => adjust(1)} disabled={hShift >= HORIZONTAL_LIMIT}>
+        <button className="step-button right" onClick={() => adjust(1)} disabled={hShift >= HORIZONTAL_LIMIT}>
           +
         </button>
       </div>
@@ -169,17 +196,18 @@ function HorizontalSlider({ hShift, onHShiftChange }) {
 }
 
 /**
- * Vertical shift slider placed in the left column next to the previews.
+ * Vertical shift slider placed beside the previews.
+ * `compact` hides the label and fits the + / - buttons to the image height.
  */
-function VerticalSlider({ vShift, maxVShift, onVShiftChange }) {
+function VerticalSlider({ compact, vShift, maxVShift, onVShiftChange }) {
   function adjust(delta) {
     onVShiftChange((prev) => Math.max(-maxVShift, Math.min(maxVShift, prev + delta)))
   }
 
   return (
-    <div className="vertical-slider">
-      <label className="slider-label">Vertical</label>
-      <button onClick={() => adjust(1)} disabled={vShift >= maxVShift}>
+    <div className={`vertical-slider ${compact ? 'compact' : ''}`}>
+      {!compact && <label className="slider-label">Vertical</label>}
+      <button className="step-button up" onClick={() => adjust(1)} disabled={vShift >= maxVShift}>
         +
       </button>
       <div className="vertical-slider-track">
@@ -192,7 +220,7 @@ function VerticalSlider({ vShift, maxVShift, onVShiftChange }) {
           onInput={(e) => onVShiftChange(Number(e.target.value))}
         />
       </div>
-      <button onClick={() => adjust(-1)} disabled={vShift <= -maxVShift}>
+      <button className="step-button down" onClick={() => adjust(-1)} disabled={vShift <= -maxVShift}>
         -
       </button>
       <button className="reset-button" onClick={() => onVShiftChange(0)}>
@@ -203,38 +231,54 @@ function VerticalSlider({ vShift, maxVShift, onVShiftChange }) {
 }
 
 /**
- * Side-by-side overlay and diff preview panels.
+ * Preview panel: horizontal slider, vertical slider, overlay and diff images.
  */
-function PreviewPanels({ leftOriginalUrl, rightOriginalUrl, originalDims, hShift, vShift, diffUrl }) {
+function PreviewPanels({ horizontalSlider, verticalSlider, leftOriginalUrl, rightOriginalUrl, originalDims, hShift, vShift, diffUrl }) {
   return (
-    <div className="image-stack">
-      <div className="image-panel">
-        <h3>Overlay</h3>
-        <div className="retro-screen fixed-screen">
-          <OverlayCanvas
-            leftUrl={leftOriginalUrl}
-            rightUrl={rightOriginalUrl}
-            width={originalDims.width}
-            height={originalDims.height}
-            hShift={hShift}
-            vShift={vShift}
-          />
-        </div>
-      </div>
+    <div className="retro-panel preview-panel">
+      <h3>Preview</h3>
+      {horizontalSlider}
+      <div className="preview-layout">
+        {verticalSlider}
+        <div className="preview-images">
+          <div className="preview-item">
+            <div className="retro-screen fixed-screen">
+              <OverlayCanvas
+                leftUrl={leftOriginalUrl}
+                rightUrl={rightOriginalUrl}
+                width={originalDims.width}
+                height={originalDims.height}
+                hShift={hShift}
+                vShift={vShift}
+              />
+            </div>
+            <span className="preview-label">Overlay</span>
+          </div>
 
-      <div className="image-panel">
-        <h3>Diff</h3>
-        <div className="retro-screen fixed-screen">
-          <DiffViewport
-            diffUrl={diffUrl}
-            width={originalDims.width}
-            height={originalDims.height}
-            hShift={hShift}
-            vShift={vShift}
-          />
+          <div className="preview-item">
+            <div className="retro-screen fixed-screen">
+              <DiffViewport
+                diffUrl={diffUrl}
+                width={originalDims.width}
+                height={originalDims.height}
+                hShift={hShift}
+                vShift={vShift}
+              />
+            </div>
+            <span className="preview-label">Diff</span>
+          </div>
         </div>
       </div>
     </div>
+  )
+}
+
+function HelpTooltip({ text }) {
+  return (
+    <span className="help-tooltip" tabIndex={0}>
+      <span className="help-icon">?</span>
+      <span className="tooltip-text">{text}</span>
+    </span>
   )
 }
 
@@ -242,78 +286,107 @@ function PreviewPanels({ leftOriginalUrl, rightOriginalUrl, originalDims, hShift
  * Advanced GIF generation settings panel.
  */
 function GifSettings({ settings, onChange }) {
+  const cyclesDisabled = settings.loop
+  const transitionDisabled = settings.crossfadeSteps === 0
+
   return (
-    <div className="gif-settings">
+    <div className="gif-settings retro-panel">
       <h3>GIF Settings</h3>
 
-      <div className="setting-row">
-        <label>Frame delay</label>
-        <div className="setting-control">
-          <input
-            type="range"
-            min={50}
-            max={1000}
-            step={50}
-            value={settings.delayMs}
-            onInput={(e) => onChange({ ...settings, delayMs: Number(e.target.value) })}
-          />
-          <span>{settings.delayMs} ms</span>
-        </div>
-      </div>
-
-      <div className="setting-row">
-        <label>Cycles</label>
-        <div className="setting-control">
-          <input
-            type="range"
-            min={1}
-            max={5}
-            step={1}
-            value={settings.cycles}
-            onInput={(e) => onChange({ ...settings, cycles: Number(e.target.value) })}
-          />
-          <span>{settings.cycles}</span>
-        </div>
-      </div>
-
-      <div className="setting-row">
-        <label>Crossfade</label>
-        <div className="setting-control">
-          <input
-            type="range"
-            min={0}
-            max={8}
-            step={1}
-            value={settings.crossfadeSteps}
-            onInput={(e) => onChange({ ...settings, crossfadeSteps: Number(e.target.value) })}
-          />
-          <span>{settings.crossfadeSteps} frames</span>
-        </div>
-      </div>
-
-      <div className="setting-row">
-        <label>Scale</label>
-        <div className="setting-control">
-          <input
-            type="range"
-            min={0.25}
-            max={1.0}
-            step={0.05}
-            value={settings.scale}
-            onInput={(e) => onChange({ ...settings, scale: Number(e.target.value) })}
-          />
-          <span>{Math.round(settings.scale * 100)}%</span>
-        </div>
-      </div>
-
       <div className="setting-row loop-row">
-        <label>Loop forever</label>
+        <label>
+          Loop forever
+          <HelpTooltip text="If ON, the GIF repeats endlessly. If OFF, it plays the set number of Cycles and stops." />
+        </label>
         <button
           className={`loop-toggle ${settings.loop ? 'on' : 'off'}`}
           onClick={() => onChange({ ...settings, loop: !settings.loop })}
         >
           {settings.loop ? 'ON' : 'OFF'}
         </button>
+        <span></span>
+      </div>
+
+      <div className={`setting-row ${cyclesDisabled ? 'disabled' : ''}`}>
+        <label>
+          Cycles
+          <HelpTooltip text="Number of left→right→left sweeps. Only used when Loop forever is OFF." />
+        </label>
+        <input
+          type="range"
+          min={1}
+          max={5}
+          step={1}
+          value={settings.cycles}
+          disabled={cyclesDisabled}
+          onInput={(e) => onChange({ ...settings, cycles: Number(e.target.value) })}
+        />
+        <span>{settings.cycles}</span>
+      </div>
+
+      <div className="setting-row">
+        <label>
+          Hold delay
+          <HelpTooltip text="Pause time on the left and right frames before sweeping. 50 ms = very fast, 1000 ms = slow." />
+        </label>
+        <input
+          type="range"
+          min={50}
+          max={1000}
+          step={50}
+          value={settings.delayMs}
+          onInput={(e) => onChange({ ...settings, delayMs: Number(e.target.value) })}
+        />
+        <span>{settings.delayMs} ms</span>
+      </div>
+
+      <div className="setting-row">
+        <label>
+          Crossfade
+          <HelpTooltip text="Blended frames between left and right. 0 = instant cut. 8 = very smooth sweep." />
+        </label>
+        <input
+          type="range"
+          min={0}
+          max={8}
+          step={1}
+          value={settings.crossfadeSteps}
+          onInput={(e) => onChange({ ...settings, crossfadeSteps: Number(e.target.value) })}
+        />
+        <span>{settings.crossfadeSteps} frames</span>
+      </div>
+
+      <div className={`setting-row ${transitionDisabled ? 'disabled' : ''}`}>
+        <label>
+          Transition delay
+          <HelpTooltip text="Time each crossfade frame is shown. Only used when Crossfade is above 0. Lower = faster sweep." />
+        </label>
+        <input
+          type="range"
+          min={20}
+          max={500}
+          step={20}
+          value={settings.transitionDelayMs}
+          disabled={transitionDisabled}
+          onInput={(e) => onChange({ ...settings, transitionDelayMs: Number(e.target.value) })}
+        />
+        <span>{settings.transitionDelayMs} ms</span>
+      </div>
+
+      <div className="setting-row">
+        <label>
+          Scale
+          <HelpTooltip text="Output size of the GIF. 25% = quarter size, 100% = original, 200% = double size." />
+        </label>
+        <input
+          type="range"
+          min={0.25}
+          max={2.0}
+          step={0.05}
+          value={settings.scale}
+          onInput={(e) => onChange({ ...settings, scale: Number(e.target.value) })}
+        />
+        <span>{Math.round(settings.scale * 100)}%</span>
       </div>
     </div>
   )
@@ -528,7 +601,7 @@ function DiffHeatmap({ data, currentHShift, currentVShift, maxVShift, loading })
  */
 function AutoAlignPanel({ loading, message, mlProgress, onDiffSearch, onMlAlign }) {
   return (
-    <div className="auto-align-panel">
+    <div className="auto-align-panel retro-panel">
       <h3>Auto Alignment</h3>
       <div className="auto-align-row">
         <button
@@ -536,14 +609,14 @@ function AutoAlignPanel({ loading, message, mlProgress, onDiffSearch, onMlAlign 
           onClick={onDiffSearch}
           disabled={loading}
         >
-          {loading && !mlProgress ? 'SEARCHING…' : 'AUTO: DIFF SEARCH'}
+          {loading && !mlProgress ? 'SEARCHING…' : 'Diff Search: Ternary'}
         </button>
         <button
           className="auto-align-button ml"
           onClick={onMlAlign}
           disabled={loading}
         >
-          {mlProgress ? `ML: ${mlProgress.text} ${Math.round(mlProgress.progress ?? 0)}%` : 'AUTO: ML'}
+          {mlProgress ? `ML: ${mlProgress.text} ${Math.round(mlProgress.progress ?? 0)}%` : 'ML: Subject Detection'}
         </button>
       </div>
       {mlProgress && (
@@ -670,11 +743,20 @@ function SearchVisualization({ steps, stats, leftUrl, rightUrl, width, height, s
   }, [steps])
 
   const step = steps[index]
-  if (!step) return null
+  if (!step) {
+    return (
+      <div className="search-viz-panel">
+      <h3>Auto Alignment Visualisation</h3>
+        <div className="search-viz-placeholder">
+          Run an auto alignment above to visualise the search.
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="search-viz-panel">
-      <h3>Search Visualization</h3>
+      <h3>Search Visualisation</h3>
       <div className="search-viz-body">
         <div className="search-viz-screen retro-screen fixed-screen" style={{ position: 'relative' }}>
           <OverlayCanvas
@@ -743,10 +825,13 @@ function SearchVisualization({ steps, stats, leftUrl, rightUrl, width, height, s
 /**
  * Combined diff graph panel: line graph on the left, heatmap on the right.
  */
-function DiffGraphPanel({ lineData, lineLoading, heatmapData, heatmapLoading, currentHShift, currentVShift, maxVShift }) {
+function DiffGraphPanel({ diffScore, lineData, lineLoading, heatmapData, heatmapLoading, currentHShift, currentVShift, maxVShift }) {
   return (
     <div className="diff-graph-panel">
-      <h3>Diff Score vs Shift</h3>
+      <h3>Diff Graphs</h3>
+      {diffScore !== null && (
+        <div className="diff-score">Score: {diffScore.toFixed(1)} / 255</div>
+      )}
       <div className="diff-graph-row">
         <DiffLineGraph data={lineData} currentHShift={currentHShift} loading={lineLoading} />
         <DiffHeatmap
@@ -795,6 +880,7 @@ function App() {
 
   const [gifSettings, setGifSettings] = useState({
     delayMs: 300,
+    transitionDelayMs: 100,
     cycles: 1,
     crossfadeSteps: 0,
     scale: 1.0,
@@ -932,6 +1018,7 @@ function App() {
   async function handleCreateGif() {
     await generateGifWithSettings({
       delayMs: 300,
+      transitionDelayMs: 100,
       cycles: 1,
       crossfadeSteps: 0,
       scale: 1.0,
@@ -1242,6 +1329,7 @@ function App() {
 
   const sharedVerticalSlider = (
     <VerticalSlider
+      compact
       vShift={vShift}
       maxVShift={maxVShift}
       onVShiftChange={setVShift}
@@ -1249,11 +1337,13 @@ function App() {
   )
 
   const sharedHorizontalSlider = (
-    <HorizontalSlider hShift={hShift} onHShiftChange={setHShift} />
+    <HorizontalSlider compact hShift={hShift} onHShiftChange={setHShift} />
   )
 
   const sharedPreviewPanels = (
     <PreviewPanels
+      horizontalSlider={sharedHorizontalSlider}
+      verticalSlider={sharedVerticalSlider}
       leftOriginalUrl={leftOriginalUrl}
       rightOriginalUrl={rightOriginalUrl}
       originalDims={originalDims}
@@ -1306,30 +1396,19 @@ function App() {
 
           {page === 'simple' ? (
             <div className="page-content simple-page">
-              {sharedHorizontalSlider}
-
-              <div className="preview-body">
-                {sharedVerticalSlider}
-                {sharedPreviewPanels}
-              </div>
-
-              {diffScore !== null && (
-                <div className="diff-score">DIFF SCORE: {diffScore.toFixed(1)} / 255</div>
-              )}
+              {sharedPreviewPanels}
 
               <div className="action-row">
-                <button className="red" onClick={handleCreateGif} disabled={gifLoading}>
-                  {gifLoading ? 'WORKING…' : 'CREATE GIF'}
-                </button>
                 <button className="grey" onClick={handleBackToUpload}>
                   BACK
+                </button>
+                <button className="red" onClick={handleCreateGif} disabled={gifLoading}>
+                  {gifLoading ? 'WORKING…' : 'GENERATE GIF'}
                 </button>
               </div>
             </div>
           ) : (
             <div className="page-content advanced-page">
-              <GifSettings settings={gifSettings} onChange={setGifSettings} />
-
               <AutoAlignPanel
                 loading={autoAlignLoading}
                 message={autoAlignMessage}
@@ -1338,48 +1417,46 @@ function App() {
                 onMlAlign={handleMlAlign}
               />
 
-              <SearchVisualization
-                key={`${autoAlignMode}-${autoAlignSteps.length}`}
-                steps={autoAlignSteps}
-                stats={autoAlignStats}
-                leftUrl={leftOriginalUrl}
-                rightUrl={rightOriginalUrl}
-                width={originalDims.width}
-                height={originalDims.height}
-                segmentations={autoAlignMode === 'ml' ? mlSegmentations : null}
-              />
+              <DropdownPanel title="Auto Alignment Visualisation">
+                <SearchVisualization
+                  key={`${autoAlignMode}-${autoAlignSteps.length}`}
+                  steps={autoAlignSteps}
+                  stats={autoAlignStats}
+                  leftUrl={leftOriginalUrl}
+                  rightUrl={rightOriginalUrl}
+                  width={originalDims.width}
+                  height={originalDims.height}
+                  segmentations={autoAlignMode === 'ml' ? mlSegmentations : null}
+                />
+              </DropdownPanel>
 
-              {sharedHorizontalSlider}
+              {sharedPreviewPanels}
 
-              <div className="preview-body">
-                {sharedVerticalSlider}
-                {sharedPreviewPanels}
-              </div>
+              <DropdownPanel title="Diff Graphs">
+                <DiffGraphPanel
+                  diffScore={diffScore}
+                  lineData={diffLineData}
+                  lineLoading={diffLineLoading}
+                  heatmapData={diffGraphData}
+                  heatmapLoading={diffGraphLoading}
+                  currentHShift={hShift}
+                  currentVShift={vShift}
+                  maxVShift={maxVShift}
+                />
+              </DropdownPanel>
 
-              {diffScore !== null && (
-                <div className="diff-score">DIFF SCORE: {diffScore.toFixed(1)} / 255</div>
-              )}
-
-              <DiffGraphPanel
-                lineData={diffLineData}
-                lineLoading={diffLineLoading}
-                heatmapData={diffGraphData}
-                heatmapLoading={diffGraphLoading}
-                currentHShift={hShift}
-                currentVShift={vShift}
-                maxVShift={maxVShift}
-              />
+              <GifSettings settings={gifSettings} onChange={setGifSettings} />
 
               <div className="action-row">
+                <button className="grey" onClick={handleBackToUpload}>
+                  BACK
+                </button>
                 <button
                   className="red"
                   onClick={handleGenerateAdvancedGif}
                   disabled={gifLoading}
                 >
                   {gifLoading ? 'WORKING…' : 'GENERATE GIF'}
-                </button>
-                <button className="grey" onClick={handleBackToUpload}>
-                  BACK
                 </button>
               </div>
             </div>
@@ -1398,13 +1475,13 @@ function App() {
           </div>
 
           <div className="action-row">
+            <button onClick={() => setScreen('preview')}>BACK</button>
             <button className="blue" onClick={handleDownloadGif}>
               DOWNLOAD GIF
             </button>
             <button className="yellow" onClick={handleDownloadAnaglyph}>
               ANAGLYPH
             </button>
-            <button onClick={() => setScreen('preview')}>BACK</button>
           </div>
         </div>
       )}
