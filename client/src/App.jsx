@@ -236,7 +236,7 @@ function VerticalSlider({ compact, vShift, maxVShift, onVShiftChange }) {
 function PreviewPanels({ horizontalSlider, verticalSlider, leftOriginalUrl, rightOriginalUrl, originalDims, hShift, vShift, diffUrl }) {
   return (
     <div className="retro-panel preview-panel">
-      <h3>Preview</h3>
+      <h3>Adjust</h3>
       {horizontalSlider}
       <div className="preview-layout">
         {verticalSlider}
@@ -602,22 +602,31 @@ function DiffHeatmap({ data, currentHShift, currentVShift, maxVShift, loading })
 function AutoAlignPanel({ loading, message, mlProgress, onDiffSearch, onMlAlign }) {
   return (
     <div className="auto-align-panel retro-panel">
-      <h3>Auto Alignment</h3>
+      <h3>
+        Auto Alignment
+        <HelpTooltip text="Automatically find the best horizontal and vertical shift to align the left and right images." />
+      </h3>
       <div className="auto-align-row">
-        <button
-          className="auto-align-button diff-search"
-          onClick={onDiffSearch}
-          disabled={loading}
-        >
-          {loading && !mlProgress ? 'SEARCHING…' : 'Diff Search: Ternary'}
-        </button>
-        <button
-          className="auto-align-button ml"
-          onClick={onMlAlign}
-          disabled={loading}
-        >
-          {mlProgress ? `ML: ${mlProgress.text} ${Math.round(mlProgress.progress ?? 0)}%` : 'ML: Subject Detection'}
-        </button>
+        <div className="auto-align-button-wrapper">
+          <button
+            className="auto-align-button diff-search"
+            onClick={onDiffSearch}
+            disabled={loading}
+          >
+            {loading && !mlProgress ? 'SEARCHING…' : 'Diff Search: Ternary'}
+          </button>
+          <HelpTooltip text="Scans both images and uses a fast ternary search to find the shift where they are most similar." />
+        </div>
+        <div className="auto-align-button-wrapper">
+          <button
+            className="auto-align-button ml"
+            onClick={onMlAlign}
+            disabled={loading}
+          >
+            {mlProgress ? `ML: ${mlProgress.text} ${Math.round(mlProgress.progress ?? 0)}%` : 'ML: Subject Detection'}
+          </button>
+          <HelpTooltip text="Finds the main subject in the photos using a machine learning model, then aligns the left and right images around it." />
+        </div>
       </div>
       {mlProgress && (
         <div className="ml-progress-bar">
@@ -796,10 +805,6 @@ function SearchVisualization({ steps, stats, leftUrl, rightUrl, width, height, s
             <span>V shift</span>
             <span>{step.vShift}</span>
           </div>
-          <div className="stat-row">
-            <span>Score</span>
-            <span>{step.score.toFixed(1)}</span>
-          </div>
           {stats && (
             <>
               <div className="stat-row">
@@ -810,10 +815,12 @@ function SearchVisualization({ steps, stats, leftUrl, rightUrl, width, height, s
                 <span>Time</span>
                 <span>{stats.timeMs} ms</span>
               </div>
-              <div className="stat-row">
-                <span>Complexity</span>
-                <span>{stats.complexity}</span>
-              </div>
+              {!segmentations && (
+                <div className="stat-row">
+                  <span>Complexity</span>
+                  <span>{stats.complexity}</span>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -1101,7 +1108,7 @@ function App() {
         complexity: 'O(log n)',
       })
       setAutoAlignMessage(
-        `DIFF SEARCH: H ${vBest.hShift} / V ${vBest.vShift} (score ${vBest.score.toFixed(1)})`
+        `Diff search complete. Optimal alignment found: H ${vBest.hShift} / V ${vBest.vShift}`
       )
     } catch (err) {
       console.error('Auto-align failed:', err)
@@ -1210,7 +1217,7 @@ function App() {
         matchConfidence: match.confidence,
       })
       setAutoAlignMessage(
-        `ML ALIGN: template match (conf ${match.confidence.toFixed(2)}, H ${vBest.hShift} / V ${vBest.vShift}, score ${vBest.score.toFixed(1)})`
+        `Subject detection complete. Optimal alignment found: H ${vBest.hShift} / V ${vBest.vShift}`
       )
     } catch (err) {
       console.error('ML auto-align failed:', err)
@@ -1466,8 +1473,6 @@ function App() {
 
       {screen === 'gif' && (
         <div className="gif-screen">
-          <CartridgeSwitcher page={page} onChange={setPage} />
-
           <h2>Your Wobble GIF</h2>
 
           <div className="retro-screen gif-preview">
@@ -1476,11 +1481,11 @@ function App() {
 
           <div className="action-row">
             <button onClick={() => setScreen('preview')}>BACK</button>
-            <button className="blue" onClick={handleDownloadGif}>
-              DOWNLOAD GIF
-            </button>
             <button className="yellow" onClick={handleDownloadAnaglyph}>
               ANAGLYPH
+            </button>
+            <button className="blue" onClick={handleDownloadGif}>
+              DOWNLOAD GIF
             </button>
           </div>
         </div>
