@@ -1363,7 +1363,7 @@ function App() {
 
       {screen === 'upload' && (
         <div className="upload-screen">
-          <h1>3DS Wigglegram Maker</h1>
+          <h1>3DS Wobble GIF Generator</h1>
 
           <div
             className={`upload-zone ${dragActive ? 'active' : ''}`}
@@ -1385,7 +1385,7 @@ function App() {
           </div>
 
           <p className="privacy-hint">
-            All processing happens locally in your browser. No images are uploaded.
+            Your photos are processed entirely in your browser. Nothing is ever sent to a server.
           </p>
         </div>
       )}
