@@ -1,57 +1,50 @@
-# 3DS MPO Wobble Tool
+# 3DS Wobble GIF Generator
 
-> *Bringing Nintendo 3DS stereo photographs back to life - as animated GIFs .*
+> Bring Nintendo 3DS stereoscopic photos back to life as animated wobble GIFs, entirely in your browser.
 
----
+<br>
 
 <!-- HERO IMAGE -->
-<!-- 💡 Add a banner image or screenshot of the app here -->
-<!-- Recommended: a wide screenshot of the app UI, or a side-by-side of an MPO pair and its resulting wobble GIF -->
-<!-- ![App Banner](images/banner.png) -->
 
----
+![App Banner](images/banner.png)
 
 ## Try it
 
-**No installation required** - the app is hosted and free to use:
+**No installation required** - the app runs entirely in your browser and is free to use:
 
-🔗 **[3ds-wobble-gif.streamlit.app](https://3ds-wobble-gif.streamlit.app/)**
+🔗 **[3ds-wobble-gif.vercel.app](https://3ds-wobble-gif.vercel.app/)**
 
-> The app may take ~30 seconds to wake up if it hasn’t been visited recently.
+Your photos are processed locally. Nothing is uploaded to a server.
 
 ---
 
 ## What is this?
 
-The Nintendo 3DS was one of the few consumer cameras to ever shoot **true stereoscopic photographs** - two slightly offset images captured simultaneously and stored together in a single `.mpo` file. On the 3DS screen, the parallax between the two lenses created a genuine glasses-free 3D effect.
+The Nintendo 3DS was one of the few consumer cameras to shoot **true stereoscopic photographs**: two slightly offset images captured at the same moment and stored together in a single `.mpo` file. On the 3DS screen, the parallax between the two lenses created a genuine glasses-free 3D effect.
 
-The problem? The `.mpo` format is almost universally unsupported outside of the 3DS itself - you can't open it in Photos, preview it in Finder, or share it anywhere meaningful. The 3D effect is completely lost. Those photos just sit on old SD cards, inaccessible and forgotten.
+Outside the 3DS, the `.mpo` format is almost unusable. The 3D effect is lost and the photos sit forgotten on old SD cards.
 
-This tool fixes that - converting any `.mpo` file into a wobble GIF that conveys the depth and parallax of the original scene - viewable on any device, in any browser, with no special hardware required.
+This tool fixes that by turning any `.mpo` file into a **wobble GIF**: an animated loop that rapidly alternates between the left and right frames. Your brain reads the parallax motion as depth, so the original 3D feel comes through on any device with no special hardware needed.
 
 ---
 
 ## How it works
 
-The classic technique for conveying depth from a stereo pair is the **wobble GIF** - rapidly alternating between the left and right frames creates an illusion of parallax motion that your brain reads as three-dimensional structure. It's an old trick from the stereoscopy community, and it works beautifully.
-
-### The pipeline
-
 ```
-.mpo file  →  extract frames  →  align & crop  →  customise & generate  →  animated GIF
+.mpo file  →  extract frames  →  align  →  customise  →  animated GIF
 ```
 
 **1. Extraction**
-An `.mpo` file is technically a multi-image JPEG - two full JPEG frames concatenated together with some metadata. Python's Pillow library can seek through frames, so extracting the left and right images is straightforward.
+An `.mpo` file is a multi-image JPEG: two full JPEG frames concatenated together with metadata. The parser splits them into separate left and right images.
 
 **2. Alignment**
-The two 3DS lenses are physically offset, which means the stereo pair has a horizontal disparity. If left uncorrected, the wobble effect can  look chaotic rather than three-dimensional. The tool lets you dial in a **symmetric crop** - trimming the right edge of the left image and the left edge of the right image by the same number of pixels - to bring the two frames into alignment.
+The two 3DS lenses are physically offset, so the stereo pair has horizontal and vertical disparity. Uncorrected, the wobble looks chaotic. The app lets you nudge the frames into alignment manually, or use one of the auto-align methods to find the best shift.
 
 **3. Diff scoring**
-To take the guesswork out of alignment, the tool computes a **mean absolute pixel difference** across all RGB channels between the two cropped frames. A lower score means the images are more similar - which generally means better aligned. There's also an auto-optimise button that brute-forces every possible crop value and picks the one with the lowest diff score.
+To remove the guesswork, the app computes a **mean absolute pixel difference** between the two aligned frames. A lower score means the images are more similar, which usually means better alignment. The diff view and diff graphs make this visible.
 
-**4. Crossfade & export**
-Rather than a hard cut between frames, the tool generates smooth **crossfade transitions** between left and right views. The number of transition steps, hold duration, and total cycles are all configurable. The result is saved as an optimised, looping GIF.
+**4. Customise and export**
+Choose your frame hold time, crossfade smoothness, output scale, and looping behaviour, then generate an optimised looping GIF. You can also download an anaglyph (red/cyan) version of the aligned pair.
 
 ---
 
@@ -67,7 +60,7 @@ Rather than a hard cut between frames, the tool generates smooth **crossfade tra
 
 <!-- **Resulting wobble GIF:** -->
 
-<!-- ![Wobble GIF](images/example_wobble.gif) --> 
+<!-- ![Wobble GIF](images/example_wobble.gif) -->
 
 <table>
   <tr>
@@ -82,7 +75,7 @@ Rather than a hard cut between frames, the tool generates smooth **crossfade tra
     <td colspan="2" align="center"><img src="images/example_wobble.gif" alt="Wobble GIF"></td>
   </tr>
   <tr>
-    <td colspan="2" align="center"> Resulting wobble GIF</td>
+    <td colspan="2" align="center">Resulting wobble GIF</td>
   </tr>
 </table>
 
@@ -90,82 +83,89 @@ Rather than a hard cut between frames, the tool generates smooth **crossfade tra
 
 ## Features
 
-| Feature | Description |
-|---|---|
-| **MPO extraction** | Pulls both stereo frames directly from a `.mpo` file |
-| **Crop alignment** | Symmetric crop slider to manually align the stereo pair |
-| **Diff scoring** | Mean absolute pixel difference to quantify alignment quality |
-| **Auto-optimise** | Brute-force search across all crop values to find the best alignment |
-| **Crossfade** | Smooth interpolated transitions between frames |
-| **Full GIF control** | Configure cycles, frame hold duration, crossfade steps, and output scale |
-| **One-click download** | Export your wobble GIF directly from the browser |
-
----
-
-## Running locally
-
-**Requirements:** Python 3.9+
-
-```bash
-git clone https://github.com/chriskersov/3DS-wobble-gif.git
-cd 3DS-wobble-gif
-pip install -r requirements.txt
-streamlit run app.py
-```
-
-The app will open at `http://localhost:8501`.
+| Feature                       | Description                                                                  |
+| ----------------------------- | ---------------------------------------------------------------------------- |
+| **MPO extraction**            | Splits a Nintendo 3DS `.mpo` file into left and right frames                 |
+| **Simple and Advanced modes** | A quick path for fast results, or full control over every setting            |
+| **Manual alignment**          | Horizontal and vertical shift sliders with live overlay and diff views       |
+| **Diff Search: Ternary**      | Fast pixel-difference search that finds the best alignment automatically     |
+| **ML: Subject Detection**     | Uses a lightweight ONNX model to detect the main subject and align around it |
+| **Diff visualisation**        | See the search steps and diff graphs to understand how alignment was found   |
+| **GIF settings**              | Control hold delay, transition delay, crossfade frames, scale, and looping   |
+| **Anaglyph export**           | Download a red/cyan anaglyph of the aligned stereo pair                      |
+| **Client-side only**          | Your images never leave your browser                                         |
 
 ---
 
 ## Using the app
 
-1. **Upload** your `.mpo` file using the file picker
-2. **Check the stereo pair** - you should see two slightly offset versions of the same scene
-3. **Adjust the crop** - drag the slider until the diff score is low, or hit **Minimise Diff Value** to auto-optimise
-4. **Review the overlay and diff image** - the overlay should look sharp, not doubled; the diff image should be mostly dark
-5. **Configure your GIF** - tune the wobble cycles, frame duration, and crossfade steps to taste
-6. **Generate and download** - hit Generate GIF, wait for encoding, then download
+1. **Upload** your `.mpo` file on the start screen.
+2. **Adjust** the alignment using the sliders, or click one of the auto-align buttons.
+3. **Tune the GIF settings** to control speed, smoothness, size, and looping.
+4. **Generate and download** your wobble GIF, or grab the anaglyph version.
+
+---
+
+## Running locally
+
+**Requirements:** Node.js 18+
+
+```bash
+git clone https://github.com/chriskersov/3DS-wobble-gif.git
+cd 3DS-wobble-gif/client
+npm install
+npm run dev
+```
+
+The app will open at `http://localhost:5173`.
+
+To create a production build:
+
+```bash
+npm run build
+```
 
 ---
 
 ## Built with
 
-- [Streamlit](https://streamlit.io) - app framework
-- [Pillow](https://python-pillow.org) - image processing and GIF encoding
-- [NumPy](https://numpy.org) - diff score calculation
-- Hosted on [Streamlit Community Cloud](https://share.streamlit.io) - free tier
+- [React](https://react.dev) - UI library
+- [Vite](https://vitejs.dev) - build tool and dev server
+- [gifenc](https://github.com/mattdesl/gifenc) - GIF encoding in the browser
+- [ONNX Runtime Web](https://onnxruntime.ai/docs/get-started/with-javascript/web.html) - running the subject segmentation model locally
+- [mpo-parser](packages/mpo-parser) - local package for parsing `.mpo` files
+- Hosted on [Vercel](https://vercel.com)
 
 ---
 
-## To do
+## Screenshots
 
-These are improvements I plan to make:
+### Upload Screen
 
-- [ ] Add a variety of example .MPO files on the website for people to try if they dont have a 3DS / .MPO file for themselves.
-- [ ] Improve the minimise diff function to first locate the subject of the image then minimise diff for just the subject. This could be done with machine learning or perhaps a depth map? Or the user could select a pixel range on the image and then the function would minimise that area. A more complex version of that would use lasso rather than a rectangle.
-- [ ] Add some instructions as to where to find the .MPO file on the SD card of the 3DS.
-- [ ] Take more photos on the 3DS and upload to have a nice gallery of images people can try.
-- [ ] Look at the colour range of the generated GIF and if it is possible to adjust that.
-- [ ] Add a 'best crop' for the example images.
-- [ ] Add Arthur shoutout somewhere in the README and add his LinkedIn.
-- [ ] Add motivation for people to get out there and take cool photos with their 3DS.
-- [ ] Add a community area with a place for people to post their own wobble gifs for people to see also with google account oath
+![Upload Screen](images/screenshot_1.png)
 
-## Complete
+### Simple Page
 
-These are improvements I have implemented:
+![Simple Page](images/screenshot_2.png)
 
-- [x] Add tooltips to each setting explaining what it does and how it affects the output.
-- [x] Fix issue where when you click the minimise diff button it creates another generate GIF button at the bottom.
-- [x] Add arrows on either side of the crop slider for ease of use.
-- [x] Add a section explaining the cropping, overlay, and diff.
-- [x] Complete the README with images.
+### Advanced Page - Adjust
 
+![Advanced Page](images/screenshot_3.png)
 
----
+### Advanced Page - Auto Alignment
 
-## Licence
+![Auto Alignment](images/screenshot_4.png)
 
-MIT
+### Advanced Page - Diff Graphs
+
+![Auto Alignment](images/screenshot_7.png)
+
+### Advanced Page - GIF Settings
+
+![Auto Alignment](images/screenshot_5.png)
+
+### Output
+
+![Output](images/screenshot_6.png)
 
 ---
